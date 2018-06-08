@@ -1,0 +1,48 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tga;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\CloudStreamerSDK.cpp" />
+    <ClCompile Include="..\..\src\utils\utils.cpp" />
+    <ClCompile Include="..\..\src\utils\MLog.cpp" />
+    <ClCompile Include="..\..\src\utils\base64.c" />
+    <ClCompile Include="..\..\src\cloud\core\CameraManager\CameraManager.cpp" />
+    <ClCompile Include="..\..\src\utils\windefsws.cpp" />
+    <ClCompile Include="..\..\src\utils\wswrap.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\CloudSDK.h" />
+    <ClInclude Include="..\..\src\utils\_cunk.h" />
+    <ClInclude Include="..\..\src\utils\utils.h" />
+    <ClInclude Include="..\..\src\CloudStreamerSDK.h" />
+    <ClInclude Include="..\..\src\utils\MLog.h" />
+    <ClInclude Include="..\..\src\utils\Context.h" />
+    <ClInclude Include="..\..\src\Interfaces\ICloudStreamerCallback.h" />
+    <ClInclude Include="..\..\src\Enums\CloudReturnCodes.h" />
+    <ClInclude Include="..\..\src\utils\base64.h" />
+    <ClInclude Include="..\..\src\Objects\CloudShareConnection.h" />
+    <ClInclude Include="..\..\src\cloud\core\CloudAPI.h" />
+    <ClInclude Include="..\..\src\cloud\core\CloudAPIEndPoints.h" />
+    <ClInclude Include="..\..\src\cloud\core\CloudHelpers.h" />
+    <ClInclude Include="..\..\src\cloud\core\CloudCommon\CloudRegToken.h" />
+    <ClInclude Include="..\..\src\cloud\core\CloudCommon\CloudToken.h" />
+    <ClInclude Include="..\..\src\cloud\core\Uri.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\CameraManagerConfig.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\StreamConfig.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\StreamConfigAudio.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\StreamConfigVideo.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\CameraManager.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\ICameraManagerCallback.h" />
+    <ClInclude Include="..\..\src\utils\windefsws.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\CameraManagerCommands.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\CameraManagerParams.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\CameraManagerDoneStatus.h" />
+    <ClInclude Include="..\..\src\cloud\core\CameraManager\CameraManagerByeReasons.h" />
+    <ClInclude Include="..\..\src\utils\wswrap.h" />
+  </ItemGroup>
+</Project>
