@@ -1,4 +1,4 @@
-# Cloud SDK for Embedded devices 
+# Embedded SDK for VXG Cloud and VXG Server 
 
 The Cloud.SDK.Embedded is a simple C/C++ refernce code for integration of IP cameras, NVRs and other video devices with VXG Cloud and VXG Server. 
 <br>
