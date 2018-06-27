@@ -1,7 +1,6 @@
 # Cloud SDK for Embedded devices 
 
-The VXG.Streamer.SDK is a simple C/C++ code for integration VXG Cloud and VXG streamer with IP cameras, 
-NVRs and any other video sources. 
+The Cloud.SDK.Embedded is a simple C/C++ refernce code for integration of IP cameras, NVRs and other video devices with VXG Cloud and VXG Server. 
 <br>
 <br>
 <br>
