@@ -17,17 +17,17 @@ https://dashboard.videoexpertsgroup.com/docs/#CameraRefCode/
  https://cmake.org/install/
 
  ### Prepare external libs (only for Windows) 
- $ cd external_libs
-  //prepare jansson library
-  $ cd jansson-2.11
-  $ mkdir build
-  $ cd build
-  $ cmake ..
-  //prepare libwebsockets library
-  $ cd libwebsockets/src
-  $ mkdir build
-  $ cd build
-  $ cmake ..
+ $ cd external_libs  
+  //prepare jansson library  
+  $ cd jansson-2.11            
+  $ mkdir build                  
+  $ cd build                       
+  $ cmake ..                         
+  //prepare libwebsockets library      
+  $ cd libwebsockets/src                 
+  $ mkdir build                            
+  $ cd build                                 
+  $ cmake ..                                   
   
 ### Make
  - Ubuntu
