@@ -46,10 +46,10 @@ https://dashboard.videoexpertsgroup.com/docs/#CameraRefCode/
 ## Run
  - Create channel/camera on cloud (make this step once for the camera)
 Register the camera on cloud https://dashboard.videoexpertsgroup.com/?streaming=  
-Add new channel => Mobile Camera=> <Enter camera name>  
+Add new channel => Mobile Camera=> "Enter camera name"  
 Copy "Access Token" from STREAMING tab.  
 Click Finish button.  
  - Run application. Go to folder where test app has built  
- (Ubuntu, RPi) ./test_cloudstreamer.exe <IP address of camera> <Access Token>  
- (Windows) test_cloudstreamer.exe <IP address of camera> <Access Token>  
+ (Ubuntu, RPi) ./test_cloudstreamer.exe "IP address of camera" "Access Token"  
+ (Windows) test_cloudstreamer.exe "IP address of camera" "Access Token"  
  
