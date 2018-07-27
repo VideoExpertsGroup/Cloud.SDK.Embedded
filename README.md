@@ -12,10 +12,8 @@ https://dashboard.videoexpertsgroup.com/docs/#CameraRefCode/
 ### Install cmake.
 - Ubuntu, RPi  
  $ sudo apt-get install cmake  
-<br>
  - Windows  
  https://cmake.org/install/  
-<br>
  ### Prepare external libs (only for Windows)   
  $ cd external_libs  
   //prepare jansson library  
@@ -28,25 +26,20 @@ https://dashboard.videoexpertsgroup.com/docs/#CameraRefCode/
   $ mkdir build                            
   $ cd build                                 
   $ cmake ..                                   
-<br>
 ### Make
  - Ubuntu  
  $ cd build.linux   
  $ ./build.sh   
-<br>
  - RPi  
  $ cd build.rpi  
  $ ./build.sh   
-<br>
  - Windows   
  Run Visual Studio, Open solution build.win\CloudSDK.cpp.sln   
-<br>
 ### Install ffmpeg (optional)  
  - Ubuntu, RPi  
  sudo apt-get install ffmpeg  
  - Windows  
  https://www.ffmpeg.org/download.html  
-<br>
  - Check ffmpeg works:  
  $ ffmpeg -version  
 
@@ -56,7 +49,6 @@ Register the camera on cloud https://dashboard.videoexpertsgroup.com/?streaming=
 Add new channel => Mobile Camera=> <Enter camera name>  
 Copy "Access Token" from STREAMING tab.  
 Click Finish button.  
-<br>
  - Run application. Go to folder where test app has built  
  (Ubuntu, RPi) ./test_cloudstreamer.exe <IP address of camera> <Access Token>  
  (Windows) test_cloudstreamer.exe <IP address of camera> <Access Token>  
