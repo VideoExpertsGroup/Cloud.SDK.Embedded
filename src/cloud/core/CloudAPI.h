@@ -158,14 +158,14 @@ private:
     }
 
     pair<int, string> executePostRequest2(string endPoint,  string json_data) {
-        list< pair< string, string>> params;
+        list< pair< string, string> > params;
 		if (usedShareToken()) {
 			params.push_back(pair<string, string >("token", mShareToken));
 		}
 
         string url = makeURL(endPoint + (params.size() ? "?" + CloudHelpers::prepareHttpGetQuery(params):""));
         // HttpsURLConnection urlConnection = (HttpsURLConnection) url.openConnection();
-        Log.d("POST %s", url);
+        Log.d("POST %s", url.c_str());
 
 		return pair<int, string>(402, "Not implemented");
 
@@ -209,14 +209,14 @@ private:
     }
 
     pair<int, string> executePutRequest2(string endPoint,  string json_data) {
-		list< pair< string, string>> params;
+		list< pair< string, string> > params;
 		if (usedShareToken()) {
 			params.push_back(pair<string, string >("token", mShareToken));
 		}
 
 		string url = makeURL(endPoint + (params.size() ? "?" + CloudHelpers::prepareHttpGetQuery(params) : ""));
         // HttpsURLConnection urlConnection = (HttpsURLConnection) url.openConnection();
-        Log.d("PUT %s", url);
+        Log.d("PUT %s", url.c_str());
 
 		return pair<int, string>(402, "Not implemented");
 

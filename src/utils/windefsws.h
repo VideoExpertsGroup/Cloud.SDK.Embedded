@@ -18,6 +18,10 @@
 #include <vector>
 #include <list>
 #include <iostream>
+#include <sstream>
+#include <algorithm>
+
+using namespace std;
 
 #ifndef _WIN32
 #include <sys/time.h>
@@ -93,6 +97,18 @@ public:
 	CAutoLock(CCritSec * plock) { m_pLock = plock; m_pLock->Lock(); };
 	~CAutoLock() { m_pLock->Unlock(); };
 };
+
+template <class T>
+string fto_string(T param)
+{
+    string str = "";
+    stringstream ss;
+    ss<<param;
+    getline(ss, str);
+    return str;
+}
+
+
 #endif  // defined(__cplusplus)
 
 //extern void logprintf(WSWRAP_DEBUG_LEVELS level, const char * msg, ...);

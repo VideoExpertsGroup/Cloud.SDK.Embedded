@@ -12,8 +12,11 @@ using namespace std;
 
 class StreamConfigVideo
 {
+
+/*
 	const char *TAG = "StreamConfigVideo";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+    const int LOG_LEVEL = 2; //Log.VERBOSE;
+
 	MLog Log;
 
 	int mVert = 480; // default value
@@ -33,12 +36,57 @@ class StreamConfigVideo
 	const string STREAM = "stream";
 	const string QUALITY = "quality";
 	const string FPS = "fps";
+*/
+
+    char *TAG = "StreamConfigVideo";
+    int LOG_LEVEL = 2;
+    MLog Log;
+
+    int mVert;
+    int mHorz;
+    bool mVbr;
+    double mFps;
+    int mGop;
+    int mQuality;
+    string mFormat;
+    string mStream;
+
+    string HORZ;
+    string VERT;
+    string FORMAT;
+    string VBR;
+    string GOP;
+    string STREAM;
+    string QUALITY;
+    string FPS;
+
+    void const_init()//for avoid -std=c++11 requirement
+    {
+        mVert = 480; // default value
+        mHorz = 640; // default value
+        mVbr = true; // default value
+        mFps = 30; // default value
+        mGop = 30; // default value
+        mQuality = 0; // default value
+        mFormat = "H.264"; // default value
+        mStream = "Vid"; // default value
+
+        HORZ = "horz";
+        VERT = "vert";
+        FORMAT = "format";
+        VBR = "vbr";
+        GOP = "gop";
+        STREAM = "stream";
+        QUALITY = "quality";
+        FPS = "fps";
+    }
 
 public:
-	StreamConfigVideo() : Log(TAG, LOG_LEVEL) {};
+    StreamConfigVideo() : Log(TAG, LOG_LEVEL) { const_init(); };
 	virtual ~StreamConfigVideo() {};
 
 	StreamConfigVideo(string config) : Log(TAG, LOG_LEVEL) {
+        const_init();
 		json_error_t err;
 		json_t *root = json_loads(config.c_str(), 0, &err);
 		if (root) {

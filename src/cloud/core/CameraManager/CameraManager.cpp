@@ -4,6 +4,7 @@
 #include "CameraManagerParams.h"
 #include "CameraManagerDoneStatus.h"
 #include "CameraManagerByeReasons.h"
+#include "../../../Enums/CloudReturnCodes.h"
 #include <jansson.h>
 
 using namespace std;
@@ -36,6 +37,9 @@ int CameraManager::OnEvent(void* inst, WEBSOCKWRAP_EVENT reason, void *in, size_
 		}
 		break;
 	case WEBSOCKWRAP_ERROR:
+		if (p->mCallback) {
+			p->mCallback->onClosed(RET_ERROR_NO_CLOUD_CONNECTION, "");
+		}
 		p->Log.v("WEBSOCKWRAP_ERROR");
 		break;
 	case WEBSOCKWRAP_LWS_OTHER:
@@ -77,11 +81,17 @@ int CameraManager::Open(CameraManagerConfig &config, ICameraManagerCallback *cal
 	std::string uri;
 	uri = mCameraManagerConfig.getAddress();
 
-	mWebSocket.Connect(uri.c_str());
+	int ret = mWebSocket.Connect(uri.c_str());
+	if (ret < 0) {
+		ret = RET_ERROR_NO_CLOUD_CONNECTION;
+		if (mCallback) {
+			mCallback->onClosed(RET_ERROR_NO_CLOUD_CONNECTION, "");
+		}
+	}
 
-	Log.v("<=Open");
+	Log.v("<=Open ret=%d", ret);
 
-	return 0;
+	return ret;
 }
 
 int CameraManager::Reconnect()
@@ -95,11 +105,17 @@ int CameraManager::Reconnect()
 	mWebSocket.Disconnect();
 	misReconnect = false;
 
-	mWebSocket.Connect(uri.c_str());
+	int ret = mWebSocket.Connect(uri.c_str());
+	if (ret < 0) {
+		ret = RET_ERROR_NO_CLOUD_CONNECTION;
+		if (mCallback) {
+			mCallback->onClosed(RET_ERROR_NO_CLOUD_CONNECTION, "");
+		}
+	}
 
-	Log.v("<=Reconnect");
+	Log.v("<=Reconnect ret=%d", ret);
 
-	return 0;
+	return ret;
 }
 
 int CameraManager::Close()

@@ -37,13 +37,13 @@ namespace CloudHelpers
 		return escaped.str();
 	}
 
-	static string prepareHttpGetQuery( list< pair<string, string>> &params) 
+	static string prepareHttpGetQuery( list< pair<string, string> > &params) 
 	{
 		string sQuery = "";
 		int i = 0;
 		//ArrayList<String> params2 = new ArrayList<>();
 		
-		list< pair<string, string>>::iterator it;
+		list< pair<string, string> >::iterator it;
 		for (it = params.begin(); it != params.end(); it++) {
 			pair<string, string> &item = *it;
 

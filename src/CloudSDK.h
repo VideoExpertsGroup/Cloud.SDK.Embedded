@@ -6,7 +6,7 @@
 #include "utils/Context.h"
 #include "utils/MLog.h"
 
-#define CLOUDSDK_LIB_VERSION "2.0.41_20180525"
+#define CLOUDSDK_LIB_VERSION "2.0.56_20180730"
 
 class CloudSDK
 {

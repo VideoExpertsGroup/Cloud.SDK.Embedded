@@ -63,11 +63,11 @@ namespace CloudAPIEndPoints
 	// Cameras endpoints
 
 	static const std::string CAMERA_PREVIEW(long long cameraID) {
-		return mCameras + std::to_string(cameraID) + "/preview/";
+		return mCameras + fto_string(cameraID) + "/preview/";
 	}
 
 	static const std::string CAMERA_PREVIEW_UPDATE(long long cameraID) {
-		return mCameras + std::to_string(cameraID) + "/preview/update/";
+		return mCameras + fto_string(cameraID) + "/preview/update/";
 	}
 
 	static const std::string CAMERAS() {
@@ -75,11 +75,11 @@ namespace CloudAPIEndPoints
 	}
 
 	static const std::string CAMERA(long long cameraID) {
-		return mCameras + std::to_string(cameraID) + "/";
+		return mCameras + fto_string(cameraID) + "/";
 	}
 
 	static const std::string CAMERA_SHARING(long long cameraID) {
-		return mCameras + std::to_string(cameraID) + "/sharings/";
+		return mCameras + fto_string(cameraID) + "/sharings/";
 	}
 
 	static const std::string CAMERA_RECORDS() {
@@ -90,7 +90,7 @@ namespace CloudAPIEndPoints
 	}
 
 	static const std::string CAMERA_TIMELINE(long long cameraID) {
-		return mStorage + "timeline/" + std::to_string(cameraID) + "/";
+		return mStorage + "timeline/" + fto_string(cameraID) + "/";
 	}
 
 	static const std::string CAMERA_TIMELINE_DAYS() {
@@ -98,21 +98,21 @@ namespace CloudAPIEndPoints
 	}
 
 	static const std::string CAMERA_LIVE_URLS(long long cameraID) {
-		return mCameras + std::to_string(cameraID) + "/live_urls/";
+		return mCameras + fto_string(cameraID) + "/live_urls/";
 	}
 
 	// Camera manager endpoints
 	static const std::string CMNGRS_RESET(long long cmngrsID) {
-		return mCameraManagers + std::to_string(cmngrsID) + "/reset/";
+		return mCameraManagers + fto_string(cmngrsID) + "/reset/";
 	}
 	static const std::string CMNGRS(long long cmngrsID) {
-		return mCameraManagers + std::to_string(cmngrsID) + "/";
+		return mCameraManagers + fto_string(cmngrsID) + "/";
 	}
 
 	// Camera Session endpoints
 
 	static const std::string CAMSESS_RECORDS(long long camsessID) {
-		return mCameraSession + std::to_string(camsessID) + "/records/";
+		return mCameraSession + fto_string(camsessID) + "/records/";
 	}
 
 	static const std::string CAMSESS() {
@@ -120,27 +120,27 @@ namespace CloudAPIEndPoints
 	}
 
 	static const std::string CAMSESS(long long camsessID) {
-		return mCameraSession + ::to_string(camsessID) + "/";
+		return mCameraSession + fto_string(camsessID) + "/";
 	}
 
 	static const std::string CAMESESS_RECORDS_UPLOAD(long long camsessID) {
-		return mCameraSession + ::to_string(camsessID) + "/records/upload/";
+		return mCameraSession + fto_string(camsessID) + "/records/upload/";
 	}
 
 	static const std::string CAMESESS_PREVIEW_UPLOAD(long long camsessID) {
-		return mCameraSession + ::to_string(camsessID) + "/preview/upload/";
+		return mCameraSession + fto_string(camsessID) + "/preview/upload/";
 	}
 
 	static const std::string CAMSESS_LIVE_STATS(long long camsessID) {
-		return mCameraSession + ::to_string(camsessID) + "/live_stats/";
+		return mCameraSession + fto_string(camsessID) + "/live_stats/";
 	}
 
 	static const std::string CAMSESS_CHAT_SEND_MESSAGE(long long camsessID) {
-		return mCameraSession + ::to_string(camsessID) + "/chat/send_message/";
+		return mCameraSession + fto_string(camsessID) + "/chat/send_message/";
 	}
 
 	static const std::string CAMSESS_PREVIEW_UPDATE(long long camsessID) { 
-		return mCameraSession + ::to_string(camsessID) + "/preview/update/";
+		return mCameraSession + fto_string(camsessID) + "/preview/update/";
 	}
 
 };

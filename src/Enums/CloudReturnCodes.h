@@ -27,4 +27,34 @@ enum CloudReturnCodes {
 	RET_ERROR_TOO_MANY_REQUESTS = (-5429)
 };
 
+inline int reason_str_to_int(std::string reason)
+{
+	if (reason.empty())
+		return RET_ERROR_NO_CLOUD_CONNECTION;
+		
+	if (!reason.compare("SYSTEM_ERROR")) {
+		return RET_ERROR_INVALID_SOURCE;
+	}
+	if (!reason.compare("INVALID_USER")) {
+		return RET_ERROR_NOT_AUTHORIZED;
+	}
+	if (!reason.compare("AUTH_FAILURE")) {
+		return RET_ERROR_ACCESS_DENIED;
+	}
+	if (!reason.compare("CONN_CONFLICT")) {
+		return RET_ERROR_TOO_MANY_REQUESTS;
+	}
+	if (!reason.compare("RECONNECT")) {
+		return RET_ERROR_NO_CLOUD_CONNECTION;
+	}
+	if (!reason.compare("SHUTDOWN")) {
+		return RET_ERROR_NO_CLOUD_CONNECTION;
+	}
+	if (!reason.compare("DELETED")) {
+		return RET_ERROR_STREAM_UNREACHABLE;
+	}
+
+	return RET_ERROR_NO_CLOUD_CONNECTION;
+}
+
 #endif //__CLOUDRETURNCODES_H__

@@ -47,15 +47,15 @@ public:
 
 
 	int openSync(std::string &share_token) {
-		std::string s = "https://web.skyvr.videoexpertsgroup.com";
+		std::string s = "http://cam.skyvr.videoexpertsgroup.com:8888";
 		return openSync(share_token, s);
 	}
 
 	int openSync(std::string &share_token, std::string &baseurl) {
-		std::string mProtocol = "https";
-		std::string def_address = "web.skyvr.videoexpertsgroup.com";
+		std::string mProtocol = "http";
+		std::string def_address = "cam.skyvr.videoexpertsgroup.com";
 		std::string mHost = def_address;
-		int mPort = 80;
+		int mPort = 8888;
 		std::string mPrefixPath = "";
 
 		if (baseurl.length() > 1 && baseurl.at(baseurl.length()-1) == '/') {
@@ -67,7 +67,7 @@ public:
 		mHost = uri.Host;
 		mPort = atoi(uri.Port.c_str());
 		if (mPort == 0)
-			mPort = 80;
+			mPort = 8888;
 		mPrefixPath = uri.Path;
 
 		Log.i("Protocol: %s", mProtocol.c_str());
@@ -75,11 +75,13 @@ public:
 		Log.i("Port: %d", mPort);
 		Log.i("PrefixPath: %s", mPrefixPath.c_str());
 
-		mCloudAPI.setHost(mHost + ((mPort > 0 && mPort != 80) ? ":" + std::to_string(mPort) : ""));
+
+		mHost = mHost + ((mPort > 0 && mPort != 80) ? ":" + fto_string(mPort) : "");
+		mCloudAPI.setHost(mHost);
 		mCloudAPI.setProtocol(mProtocol);
 		mCloudAPI.setPrefixPath(mPrefixPath);
 		mCloudAPI.setShareToken(share_token);
-		if (!mHost.find(def_address)) {
+		if (string::npos == mHost.find(def_address)) {
 			mCloudAPI.setCMAddress(mHost);
 		}
 		mOpened = true;

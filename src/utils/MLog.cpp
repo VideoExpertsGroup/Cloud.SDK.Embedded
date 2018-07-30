@@ -41,8 +41,10 @@ void MLog::setLogEnable(bool b)
 
 void MLog::_init(int level, const char * filename)
 {
-	int m = std::min<int>(globalLevel, level);
-	this->level = signedWithDebug() ? m : globalLevel;
+//	int m = std::min<int>(globalLevel, level);
+//  this->level = signedWithDebug() ? m : globalLevel;
+    int m = std::max<int>(globalLevel, level);
+    this->level = signedWithDebug() ? m : LOGLEVEL_ASSERT;
 
 	if (filename && ndbgFile == -1) {
 #ifdef WIN32

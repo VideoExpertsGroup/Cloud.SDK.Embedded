@@ -10,8 +10,10 @@ using namespace std;
 
 class StreamConfigAudio
 {
-	const char *TAG = "StreamConfigAudio";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+/*
+    const char *TAG = "StreamConfigAudio";
+    const int LOG_LEVEL = 2; //Log.VERBOSE;
+
 	MLog Log;
 
 	string mStream = "Aud"; // default value
@@ -23,12 +25,41 @@ class StreamConfigAudio
 	const string BRT = "brt";
 	const string SRT = "srt";
 	const string STREAM = "stream";
+*/
+
+    char *TAG = "StreamConfigAudio";
+    int LOG_LEVEL = 2; //Log.VERBOSE;
+    MLog Log;
+
+    string mStream;
+    int mBitrate;
+    string mFormat;
+    double mSrt;
+
+    string FORMAT;
+    string BRT;
+    string SRT;
+    string STREAM;
+
+    void const_init()//for avoid -std=c++11 requirement
+    {
+        mStream = "Aud"; // default value
+        mBitrate = 128; // in kbps
+        mFormat = "AAC"; // default value
+        mSrt = 44.1; // default value
+
+        FORMAT = "format";
+        BRT = "brt";
+        SRT = "srt";
+        STREAM = "stream";
+    }
 
 public:
-	StreamConfigAudio() : Log(TAG, LOG_LEVEL) {};
+    StreamConfigAudio() : Log(TAG, LOG_LEVEL) { const_init(); };
 	virtual ~StreamConfigAudio() {};
 
 	StreamConfigAudio(string config) : Log(TAG, LOG_LEVEL) {
+        const_init();
 		json_error_t err;
 		json_t *root = json_loads(config.c_str(), 0, &err);
 		if (root) {

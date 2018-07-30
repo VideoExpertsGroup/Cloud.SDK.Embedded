@@ -4,6 +4,7 @@
 #include "../../../utils/utils.h"
 #include "../../../utils/_cunk.h"
 #include "../../../utils/MLog.h"
+#include "../../../cloud/core/Uri.h"
 #include "../CloudCommon/CloudRegToken.h"
 #include "StreamConfig.h"
 
@@ -114,6 +115,18 @@ public:
 	}
 
 
+    void setCMURL(string url) {
+        if (url.empty()) {
+            mAddress = DEFAULT_ADDRESS;
+            PORT = 8888;
+        }
+        else {
+            Uri uri = Uri::Parse(url);
+            mAddress = uri.Host;
+            //PORT = atoi(uri.Port.c_str());
+            PORT = 8888;
+        }
+    }
 
 	void setCMAddress(string url) {
 		if (url.empty()) {
@@ -218,12 +231,13 @@ public:
 
 		string uri;
 		string address = mReconnectAddress.empty() ? mAddress : mReconnectAddress;
+		bool noPort = (address.find(":") == string::npos);
 
 		if ( !getConnID().empty() ) {
-			uri = PROTOCOL + address + ":" + std::to_string(PORT) + "/ctl/" + getConnID() + "/";
+			uri = PROTOCOL + address + (noPort ?":" + fto_string(PORT) :"") + "/ctl/" + getConnID() + "/";
 		}
 		else if (!mRegToken.isEmpty()) {
-			uri = PROTOCOL + address + ":" + std::to_string(PORT) + "/ctl/NEW/" + mRegToken.getToken() + "/";
+			uri = PROTOCOL + address + (noPort ? ":" + fto_string(PORT) : "") + "/ctl/NEW/" + mRegToken.getToken() + "/";
 		}
 		else {
 			Log.e("getAddress, error");

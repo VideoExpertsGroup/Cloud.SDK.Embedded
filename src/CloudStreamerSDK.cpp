@@ -30,13 +30,23 @@ int CloudStreamerSDK::setSource(std::string &channel)
 
 	json_error_t err;
 	json_t *root = json_loads(out_channel, 0, &err);
+	Log.v("=setSource %s", out_channel);
 	delete out_channel;
 
 	mToken = json_string_value(json_object_get(root, "token"));
 	mCamid = json_integer_value(json_object_get(root, "camid"));
 	const char *p = json_string_value(json_object_get(root, "svcp"));
 	if (p) {
-		mSvcpUrl = p;
+		Uri uri = Uri::Parse(p);
+		mSvcpUrl = "http://" + uri.Host + ":8888";
+	}
+
+	p = json_string_value(json_object_get(root, "cam"));
+	if (p) {
+		long long svcpPort = 8888;
+		if(json_object_get(root, "cam_p"))
+			svcpPort = json_integer_value(json_object_get(root, "cam_p"));
+		mSvcpUrl = "http://" + std::string(p) + ":" + fto_string(svcpPort);
 	}
 
 	json_decref(root);
@@ -65,6 +75,7 @@ int CloudStreamerSDK::setSource(std::string &channel)
 	//in near future it gotta been mToken
 	CloudRegToken cloudToken(std::string("{\"token\" : \""+ mToken+"\"}"));
 	mCameraManagerConfig.setRegToken(cloudToken);
+	mCameraManagerConfig.setCMAddress(mConnection._getCloudAPI().getCMAddress());
 
 	if (mCallback) {
 		mCallback->onCameraConnected();
@@ -75,8 +86,8 @@ int CloudStreamerSDK::setSource(std::string &channel)
 
 int CloudStreamerSDK::Start()
 {
-	prepareCM();
-	return 0;
+	int ret = prepareCM();
+	return ret;
 }
 
 int CloudStreamerSDK::Stop()
@@ -117,6 +128,9 @@ void CloudStreamerSDK::onPrepared()
 
 void CloudStreamerSDK::onClosed(int error, std::string reason)
 {
+	if (error == -1) {
+		error = reason_str_to_int(reason);
+	}
 	Log.v("=onClosed %d:%s", error, reason.c_str());
 	if (mCallback)
 		mCallback->onError(error);
