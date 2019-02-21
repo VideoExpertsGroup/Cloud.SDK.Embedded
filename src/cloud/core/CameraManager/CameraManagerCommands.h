@@ -41,11 +41,15 @@ namespace CameraManagerCommands {
 	const char * SET_AUDIO_DETECTION = "set_audio_detection";
 	const char * GET_PTZ_CONF = "get_ptz_conf";
 
+	const char * RAW_MESSAGE = "raw_message";
+
 	//=>upload segments
 	const char * GET_DIRECT_UPLOAD_URL = "get_direct_upload_url"; // CM =>
 	const char * DIRECT_UPLOAD_URL = "direct_upload_url"; // <=SRV
 	const char * CONFIRM_DIRECT_UPLOAD = "confirm_direct_upload"; // CM =>
-																				//<=upload segments
+	//<=upload segments
+
+	const char * CAM_GET_LOG = "cam_get_log";
 
 }
 #endif //__CAMERAMANAGERCOMMANDS_H__

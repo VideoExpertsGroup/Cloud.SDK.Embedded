@@ -1,7 +1,7 @@
 /*
  * libwebsockets - lib/client/client.c
  *
- * Copyright (C) 2010-2017 Andy Green <andy@warmcat.com>
+ * Copyright (C) 2010-2018 Andy Green <andy@warmcat.com>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -48,7 +48,7 @@ lws_client_wsi_effective(struct lws *wsi)
 	} lws_end_foreach_dll_safe(d, d1);
 
 	return lws_container_of(tail, struct lws,
-				  dll_client_transaction_queue);
+				dll_client_transaction_queue);
 }
 
 /*
@@ -66,7 +66,7 @@ _lws_client_wsi_master(struct lws *wsi)
 	d = wsi->dll_client_transaction_queue.prev;
 	while (d) {
 		wsi_eff = lws_container_of(d, struct lws,
-					dll_client_transaction_queue_head);
+					   dll_client_transaction_queue_head);
 
 		d = d->prev;
 	}
@@ -93,7 +93,7 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 	char *sb = p;
 	int n = 0;
 #if defined(LWS_WITH_SOCKS5)
-	char conn_mode = 0, pending_timeout = 0;
+	int conn_mode = 0, pending_timeout = 0;
 #endif
 
 	if ((pollfd->revents & LWS_POLLOUT) &&
@@ -111,11 +111,12 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 		 */
 		lws_vhost_lock(wsi->vhost);
 		lws_start_foreach_dll_safe(struct lws_dll_lws *, d, d1,
-					   wsi->dll_client_transaction_queue_head.next) {
+				  wsi->dll_client_transaction_queue_head.next) {
 			struct lws *w = lws_container_of(d, struct lws,
 						  dll_client_transaction_queue);
 
-			lwsl_debug("%s: %p states 0x%x\n", __func__, w, w->wsistate);
+			lwsl_debug("%s: %p states 0x%x\n", __func__, w,
+				   w->wsistate);
 			if (lwsi_state(w) == LRS_H1C_ISSUE_HANDSHAKE2)
 				wfound = w;
 		} lws_end_foreach_dll_safe(d, d1);
@@ -126,7 +127,14 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 			 * need to use that in HANDSHAKE2 to understand
 			 * which wsi to actually write on
 			 */
-			lws_client_socket_service(wfound, pollfd, wsi);
+			if (lws_client_socket_service(wfound, pollfd, wsi) < 0) {
+				/* closed */
+
+				lws_vhost_unlock(wsi->vhost);
+
+				return -1;
+			}
+
 			lws_callback_on_writable(wsi);
 		} else
 			lwsl_debug("%s: didn't find anything in txn q in HS2\n",
@@ -208,7 +216,8 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 
 		case LRS_WAITING_SOCKS_AUTH_REPLY:
 			if (pt->serv_buf[0] != SOCKS_SUBNEGOTIATION_VERSION_1 ||
-			    pt->serv_buf[1] != SOCKS_SUBNEGOTIATION_STATUS_SUCCESS)
+			    pt->serv_buf[1] !=
+					    SOCKS_SUBNEGOTIATION_STATUS_SUCCESS)
 				goto socks_reply_fail;
 
 			lwsl_client("SOCKS password OK, sending connect\n");
@@ -243,8 +252,8 @@ socks_reply_fail:
 			/* free stash since we are done with it */
 			lws_client_stash_destroy(wsi);
 			if (lws_hdr_simple_create(wsi,
-						  _WSI_TOKEN_CLIENT_PEER_ADDRESS,
-						  wsi->vhost->socks_proxy_address))
+						 _WSI_TOKEN_CLIENT_PEER_ADDRESS,
+					       wsi->vhost->socks_proxy_address))
 				goto bail3;
 
 			wsi->c_port = wsi->vhost->socks_proxy_port;
@@ -252,6 +261,8 @@ socks_reply_fail:
 			/* clear his proxy connection timeout */
 			lws_set_timeout(wsi, NO_PENDING_TIMEOUT, 0);
 			goto start_ws_handshake;
+		default:
+			break;
 		}
 		break;
 #endif
@@ -350,7 +361,9 @@ start_ws_handshake:
 			 * So this is it, we are an h2 master client connection
 			 * now, not an h1 client connection.
 			 */
+#if defined (LWS_WITH_TLS)
 			lws_tls_server_conn_alpn(wsi);
+#endif
 
 			/* send the H2 preface to legitimize the connection */
 			if (lws_h2_issue_preface(wsi)) {
@@ -375,7 +388,8 @@ start_ws_handshake:
 				return 0;
 
 			lwsl_err("Failed to generate handshake for client\n");
-			lws_close_free_wsi(wsi, LWS_CLOSE_STATUS_NOSTATUS, "chs");
+			lws_close_free_wsi(wsi, LWS_CLOSE_STATUS_NOSTATUS,
+					   "chs");
 			return 0;
 		}
 
@@ -383,8 +397,9 @@ start_ws_handshake:
 		lws_latency_pre(context, wsi);
 
 		w = _lws_client_wsi_master(wsi);
-		lwsl_info("%s: HANDSHAKE2: %p: sending headers on %p (wsistate 0x%x 0x%x)\n",
-				__func__, wsi, w, wsi->wsistate, w->wsistate);
+		lwsl_info("%s: HANDSHAKE2: %p: sending headers on %p "
+			  "(wsistate 0x%x 0x%x)\n", __func__, wsi, w,
+			  wsi->wsistate, w->wsistate);
 
 		n = lws_ssl_capable_write(w, (unsigned char *)sb, (int)(p - sb));
 		lws_latency(context, wsi, "send lws_issue_raw", n,
@@ -392,7 +407,8 @@ start_ws_handshake:
 		switch (n) {
 		case LWS_SSL_CAPABLE_ERROR:
 			lwsl_debug("ERROR writing to client socket\n");
-			lws_close_free_wsi(wsi, LWS_CLOSE_STATUS_NOSTATUS, "cws");
+			lws_close_free_wsi(wsi, LWS_CLOSE_STATUS_NOSTATUS,
+					   "cws");
 			return 0;
 		case LWS_SSL_CAPABLE_MORE_SERVICE:
 			lws_callback_on_writable(wsi);
@@ -417,7 +433,7 @@ start_ws_handshake:
 #if defined(LWS_ROLE_H1) || defined(LWS_ROLE_H2)
 			w->http.ah->parser_state = WSI_TOKEN_NAME_PART;
 			w->http.ah->lextable_pos = 0;
-			/* If we're (re)starting on headers, need other implied init */
+			/* If we're (re)starting on hdr, need other implied init */
 			wsi->http.ah->ues = URIES_IDLE;
 #endif
 		}
@@ -547,11 +563,12 @@ lws_http_transaction_completed_client(struct lws *wsi)
 {
 	struct lws *wsi_eff = lws_client_wsi_effective(wsi);
 
-	lwsl_info("%s: wsi: %p, wsi_eff: %p\n", __func__, wsi, wsi_eff);
+	lwsl_info("%s: wsi: %p, wsi_eff: %p (%s)\n", __func__, wsi, wsi_eff,
+		    wsi_eff->protocol->name);
 
-	if (user_callback_handle_rxflow(wsi_eff->protocol->callback,
-			wsi_eff, LWS_CALLBACK_COMPLETED_CLIENT_HTTP,
-			wsi_eff->user_space, NULL, 0)) {
+	if (user_callback_handle_rxflow(wsi_eff->protocol->callback, wsi_eff,
+					LWS_CALLBACK_COMPLETED_CLIENT_HTTP,
+					wsi_eff->user_space, NULL, 0)) {
 		lwsl_debug("%s: Completed call returned nonzero (role 0x%x)\n",
 						__func__, lwsi_role(wsi_eff));
 		return -1;
@@ -577,6 +594,8 @@ lws_http_transaction_completed_client(struct lws *wsi)
 			LWS_CLOSE_STATUS_CLIENT_TRANSACTION_DONE,
 			"queued client done");
 	}
+
+	_lws_header_table_reset(wsi->http.ah);
 
 	/* after the first one, they can only be coming from the queue */
 	wsi->transaction_from_pipeline_queue = 1;
@@ -622,35 +641,29 @@ lws_http_transaction_completed_client(struct lws *wsi)
 	/* If we're (re)starting on headers, need other implied init */
 	wsi->http.ah->ues = URIES_IDLE;
 
-	lwsl_info("%s: %p: new queued transaction as %p\n", __func__, wsi, wsi_eff);
+	lwsl_info("%s: %p: new queued transaction as %p\n", __func__, wsi,
+		  wsi_eff);
 	lws_callback_on_writable(wsi);
 
 	return 0;
 }
 
 LWS_VISIBLE LWS_EXTERN unsigned int
-lws_http_client_http_response(struct lws *wsi)
+lws_http_client_http_response(struct lws *_wsi)
 {
-	if (!wsi->http.ah)
-		return 0;
+	struct lws *wsi;
+	unsigned int resp;
 
-	return wsi->http.ah->http_response;
+	if (_wsi->http.ah && _wsi->http.ah->http_response)
+		return _wsi->http.ah->http_response;
+
+	lws_vhost_lock(_wsi->vhost);
+	wsi = _lws_client_wsi_master(_wsi);
+	resp = wsi->http.ah->http_response;
+	lws_vhost_unlock(_wsi->vhost);
+
+	return resp;
 }
-#endif
-#if defined(LWS_PLAT_OPTEE)
-char *
-strrchr(const char *s, int c)
-{
-	char *hit = NULL;
-
-	while (*s)
-		if (*(s++) == (char)c)
-		       hit = (char *)s - 1;
-
-	return hit;
-}
-
-#define atoll atoi
 #endif
 
 #if defined(LWS_ROLE_H1) || defined(LWS_ROLE_H2)
@@ -660,7 +673,7 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 	int n, port = 0, ssl = 0;
 	int close_reason = LWS_CLOSE_STATUS_PROTOCOL_ERR;
 	const char *prot, *ads = NULL, *path, *cce = NULL;
-	struct allocated_headers *ah = NULL;
+	struct allocated_headers *ah;
 	struct lws *w = lws_client_wsi_effective(wsi);
 	char *p, *q;
 	char new_path[300];
@@ -673,7 +686,8 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 		 */
 #if defined(LWS_ROLE_H2)
 		if (wsi->client_h2_alpn || wsi->client_h2_substream) {
-			lwsl_debug("%s: %p: transitioning to h2 client\n", __func__, wsi);
+			lwsl_debug("%s: %p: transitioning to h2 client\n",
+				   __func__, wsi);
 			lws_role_transition(wsi, LWSIFR_CLIENT,
 					    LRS_ESTABLISHED, &role_ops_h2);
 		} else
@@ -681,7 +695,8 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 		{
 #if defined(LWS_ROLE_H1)
 			{
-			lwsl_debug("%s: %p: transitioning to h1 client\n", __func__, wsi);
+			lwsl_debug("%s: %p: transitioning to h1 client\n",
+				   __func__, wsi);
 			lws_role_transition(wsi, LWSIFR_CLIENT,
 					    LRS_ESTABLISHED, &role_ops_h1);
 			}
@@ -707,7 +722,7 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 	 * set-cookie:.test=LWS_1456736240_336776_COOKIE;Max-Age=360000
 	 */
 
-	wsi->http.connection_type = HTTP_CONNECTION_KEEP_ALIVE;
+	wsi->http.conn_type = HTTP_CONNECTION_KEEP_ALIVE;
 	if (!wsi->client_h2_substream) {
 		p = lws_hdr_simple_ptr(wsi, WSI_TOKEN_HTTP);
 		if (wsi->do_ws && !p) {
@@ -717,7 +732,7 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 		}
 		if (!p) {
 			p = lws_hdr_simple_ptr(wsi, WSI_TOKEN_HTTP1_0);
-			wsi->http.connection_type = HTTP_CONNECTION_CLOSE;
+			wsi->http.conn_type = HTTP_CONNECTION_CLOSE;
 		}
 		if (!p) {
 			cce = "HS: URI missing";
@@ -781,7 +796,7 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 			q = strrchr(new_path, '/');
 			if (q)
 				lws_strncpy(q + 1, p, sizeof(new_path) -
-							(q - new_path));
+							(q - new_path) - 1);
 			else
 				path = p;
 		}
@@ -814,8 +829,9 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 
 		/* if h1 KA is allowed, enable the queued pipeline guys */
 
-		if (!wsi->client_h2_alpn && !wsi->client_h2_substream && w == wsi) { /* ie, coming to this for the first time */
-			if (wsi->http.connection_type == HTTP_CONNECTION_KEEP_ALIVE)
+		if (!wsi->client_h2_alpn && !wsi->client_h2_substream &&
+		    w == wsi) { /* ie, coming to this for the first time */
+			if (wsi->http.conn_type == HTTP_CONNECTION_KEEP_ALIVE)
 				wsi->keepalive_active = 1;
 			else {
 				/*
@@ -835,13 +851,16 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 				wsi->keepalive_rejected = 1;
 
 				lws_vhost_lock(wsi->vhost);
-				lws_start_foreach_dll_safe(struct lws_dll_lws *, d, d1,
-							   wsi->dll_client_transaction_queue_head.next) {
-					struct lws *ww = lws_container_of(d, struct lws,
-								  dll_client_transaction_queue);
+				lws_start_foreach_dll_safe(struct lws_dll_lws *,
+							   d, d1,
+				  wsi->dll_client_transaction_queue_head.next) {
+					struct lws *ww = lws_container_of(d,
+						struct lws,
+						dll_client_transaction_queue);
 
 					/* remove him from our queue */
-					lws_dll_lws_remove(&ww->dll_client_transaction_queue);
+					lws_dll_lws_remove(
+					     &ww->dll_client_transaction_queue);
 					/* give up on pipelining */
 					ww->client_pipeline = 0;
 
@@ -869,7 +888,7 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 			if (!strncmp(lws_hdr_simple_ptr(wsi,
 						WSI_TOKEN_HTTP_CONTENT_TYPE),
 						"text/html", 9))
-				wsi->http.perform_rewrite = 1;
+				wsi->http.perform_rewrite = 0;
 		}
 #endif
 
@@ -903,16 +922,15 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 					wsi->http.rx_content_length;
 		} else /* can't do 1.1 without a content length or chunked */
 			if (!wsi->chunked)
-				wsi->http.connection_type =
-							HTTP_CONNECTION_CLOSE;
+				wsi->http.conn_type = HTTP_CONNECTION_CLOSE;
 
 		/*
 		 * we seem to be good to go, give client last chance to check
 		 * headers and OK it
 		 */
-		if (wsi->protocol->callback(wsi,
+		if (w->protocol->callback(w,
 				LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH,
-					    wsi->user_space, NULL, 0)) {
+					    w->user_space, NULL, 0)) {
 
 			cce = "HS: disallowed by client filter";
 			goto bail2;
@@ -924,9 +942,9 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 		wsi->rxflow_change_to = LWS_RXFLOW_ALLOW;
 
 		/* call him back to inform him he is up */
-		if (wsi->protocol->callback(wsi,
+		if (w->protocol->callback(w,
 					    LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP,
-					    wsi->user_space, NULL, 0)) {
+					    w->user_space, NULL, 0)) {
 			cce = "HS: disallowed at ESTABLISHED";
 			goto bail3;
 		}
@@ -941,6 +959,15 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 			lws_header_table_detach(w, 0);
 
 		lwsl_info("%s: client connection up\n", __func__);
+
+		/*
+		 * Did we get a response from the server with an explicit
+		 * content-length of zero?  If so, this transaction is already
+		 * completed at the end of the header processing...
+		 */
+		if (lws_hdr_total_length(wsi, WSI_TOKEN_HTTP_CONTENT_LENGTH) &&
+		    !wsi->http.rx_content_length)
+		        return !!lws_http_transaction_completed_client(wsi);
 
 		return 0;
 	}
@@ -964,14 +991,16 @@ bail2:
 		n = 0;
 		if (cce)
 			n = (int)strlen(cce);
-		wsi->protocol->callback(wsi,
+		w->protocol->callback(w,
 				LWS_CALLBACK_CLIENT_CONNECTION_ERROR,
-				wsi->user_space, (void *)cce,
+				w->user_space, (void *)cce,
 				(unsigned int)n);
 	}
 	wsi->already_did_cce = 1;
 
-	lwsl_info("closing connection due to bail2 connection error\n");
+	lwsl_info("closing connection (prot %s) "
+		  "due to bail2 connection error: %s\n", wsi->protocol ?
+				  wsi->protocol->name : "unknown", cce);
 
 	/* closing will free up his parsing allocations */
 	lws_close_free_wsi(wsi, close_reason, "c hs interp");
@@ -1011,14 +1040,15 @@ lws_generate_client_handshake(struct lws *wsi, char *pkt)
 				return NULL;
 			}
 
-			lws_bind_protocol(wsi, pr);
+			lws_bind_protocol(wsi, pr, __func__);
 		}
 
 		if ((wsi->protocol->callback)(wsi, LWS_CALLBACK_RAW_ADOPT,
 					      wsi->user_space, NULL, 0))
 			return NULL;
 
-		lws_role_transition(wsi, 0, LRS_ESTABLISHED, &role_ops_raw_skt);
+		lws_role_transition(wsi, LWSIFR_CLIENT, LRS_ESTABLISHED,
+				    &role_ops_raw_skt);
 		lws_header_table_detach(wsi, 1);
 
 		return NULL;
@@ -1037,40 +1067,46 @@ lws_generate_client_handshake(struct lws *wsi, char *pkt)
 	 * Sec-WebSocket-Version: 4
 	 */
 
-	p += sprintf(p, "%s %s HTTP/1.1\x0d\x0a", meth,
+	p += snprintf(p, 2048, "%s %s HTTP/1.1\x0d\x0a", meth,
 		     lws_hdr_simple_ptr(wsi, _WSI_TOKEN_CLIENT_URI));
 
-	p += sprintf(p, "Pragma: no-cache\x0d\x0a"
+	p += snprintf(p, 64, "Pragma: no-cache\x0d\x0a"
 			"Cache-Control: no-cache\x0d\x0a");
 
-	p += sprintf(p, "Host: %s\x0d\x0a",
+	p += snprintf(p, 128, "Host: %s\x0d\x0a",
 		     lws_hdr_simple_ptr(wsi, _WSI_TOKEN_CLIENT_HOST));
 
 	if (lws_hdr_simple_ptr(wsi, _WSI_TOKEN_CLIENT_ORIGIN)) {
 		if (lws_check_opt(wsi->context->options,
 				  LWS_SERVER_OPTION_JUST_USE_RAW_ORIGIN))
-			p += sprintf(p, "Origin: %s\x0d\x0a",
+			p += snprintf(p, 128, "Origin: %s\x0d\x0a",
 				     lws_hdr_simple_ptr(wsi,
 						     _WSI_TOKEN_CLIENT_ORIGIN));
 		else
-			p += sprintf(p, "Origin: http://%s\x0d\x0a",
+			p += snprintf(p, 128, "Origin: http://%s\x0d\x0a",
 				     lws_hdr_simple_ptr(wsi,
 						     _WSI_TOKEN_CLIENT_ORIGIN));
 	}
 #if defined(LWS_ROLE_WS)
-	if (wsi->do_ws)
-		p = lws_generate_client_ws_handshake(wsi, p);
+	if (wsi->do_ws) {
+		const char *conn1 = "";
+		if (!wsi->client_pipeline)
+			conn1 = "close, ";
+		p = lws_generate_client_ws_handshake(wsi, p, conn1);
+	} else
 #endif
+		if (!wsi->client_pipeline)
+			p += snprintf(p, 64, "connection: close\x0d\x0a");
 
 	/* give userland a chance to append, eg, cookies */
 
 	if (wsi->protocol->callback(wsi,
-				LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER,
-				wsi->user_space, &p,
-				(pkt + wsi->context->pt_serv_buf_size) - p - 12))
+			LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER,
+			wsi->user_space, &p,
+			(pkt + wsi->context->pt_serv_buf_size) - p - 12))
 		return NULL;
 
-	p += sprintf(p, "\x0d\x0a");
+	p += snprintf(p, 4, "\x0d\x0a");
 
 	return p;
 }
@@ -1091,14 +1127,11 @@ lws_http_client_read(struct lws *wsi, char **buf, int *len)
 	lws_change_pollfd(wsi, 0, LWS_POLLIN);
 
 	if (rlen == LWS_SSL_CAPABLE_ERROR) {
-		lwsl_notice("%s: SSL capable error\n", __func__);
+		lwsl_debug("%s: SSL capable error\n", __func__);
 		return -1;
 	}
 
-	if (rlen == 0)
-		return -1;
-
-	if (rlen < 0)
+	if (rlen <= 0)
 		return 0;
 
 	*len = rlen;
@@ -1118,7 +1151,7 @@ spin_chunks:
 			}
 			n = char_to_hex((*buf)[0]);
 			if (n < 0) {
-				lwsl_debug("chunking failure\n");
+				lwsl_info("%s: chunking failure\n", __func__);
 				return -1;
 			}
 			wsi->chunk_remaining <<= 4;
@@ -1126,7 +1159,7 @@ spin_chunks:
 			break;
 		case ELCP_CR:
 			if ((*buf)[0] != '\x0a') {
-				lwsl_debug("chunking failure\n");
+				lwsl_info("%s: chunking failure\n", __func__);
 				return -1;
 			}
 			wsi->chunk_parser = ELCP_CONTENT;
@@ -1141,7 +1174,7 @@ spin_chunks:
 
 		case ELCP_POST_CR:
 			if ((*buf)[0] != '\x0d') {
-				lwsl_debug("chunking failure\n");
+				lwsl_info("%s: chunking failure\n", __func__);
 
 				return -1;
 			}
@@ -1150,8 +1183,11 @@ spin_chunks:
 			break;
 
 		case ELCP_POST_LF:
-			if ((*buf)[0] != '\x0a')
+			if ((*buf)[0] != '\x0a') {
+				lwsl_info("%s: chunking failure\n", __func__);
+
 				return -1;
+			}
 
 			wsi->chunk_parser = ELCP_HEX;
 			wsi->chunk_remaining = 0;
@@ -1174,7 +1210,7 @@ spin_chunks:
 	    wsi->chunk_remaining < n)
 		n = wsi->chunk_remaining;
 
-#ifdef LWS_WITH_HTTP_PROXY
+#if defined(LWS_WITH_HTTP_PROXY) && defined(LWS_WITH_HUBBUB)
 	/* hubbub */
 	if (wsi->http.perform_rewrite)
 		lws_rewrite_parse(wsi->http.rw, (unsigned char *)*buf, n);
@@ -1186,7 +1222,7 @@ spin_chunks:
 		if (user_callback_handle_rxflow(wsi_eff->protocol->callback,
 				wsi_eff, LWS_CALLBACK_RECEIVE_CLIENT_HTTP_READ,
 				wsi_eff->user_space, *buf, n)) {
-			lwsl_debug("%s: RECEIVE_CLIENT_HTTP_READ returned -1\n",
+			lwsl_info("%s: RECEIVE_CLIENT_HTTP_READ returned -1\n",
 				   __func__);
 
 			return -1;

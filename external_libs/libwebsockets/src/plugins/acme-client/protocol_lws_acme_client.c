@@ -34,7 +34,7 @@
 #if !defined (LWS_PLUGIN_STATIC)
 #define LWS_DLL
 #define LWS_INTERNAL
-#include "../lib/libwebsockets.h"
+#include <libwebsockets.h>
 #endif
 
 #include <string.h>
@@ -435,14 +435,15 @@ lws_acme_load_create_auth_keys(struct per_vhost_data__lws_acme_client *vhd,
 {
 	int n;
 
-	if (!lws_jwk_load(&vhd->jwk, vhd->pvop[LWS_TLS_SET_AUTH_PATH]))
+	if (!lws_jwk_load(&vhd->jwk, vhd->pvop[LWS_TLS_SET_AUTH_PATH],
+			  NULL, NULL))
 		return 0;
 
-	strcpy(vhd->jwk.keytype, "RSA");
+	vhd->jwk.kty = LWS_GENCRYPTO_KTY_RSA;
 	lwsl_notice("Generating ACME %d-bit keypair... "
 		    "will take a little while\n", bits);
-	n = lws_genrsa_new_keypair(vhd->context, &vhd->rsactx, &vhd->jwk.el,
-				   bits);
+	n = lws_genrsa_new_keypair(vhd->context, &vhd->rsactx, LGRSAM_PKCS1_1_5,
+				   vhd->jwk.e, bits);
 	if (n) {
 		lwsl_notice("failed to create keypair\n");
 
@@ -546,17 +547,20 @@ callback_acme_client(struct lws *wsi, enum lws_callback_reasons reason,
 					lws_get_protocol(wsi));
 	char buf[LWS_PRE + 2536], *start = buf + LWS_PRE, *p = start,
 	     *end = buf + sizeof(buf) - 1, digest[32], *failreason = NULL;
-	unsigned char **pp, *pend;
-	const char *content_type;
 	const struct lws_protocol_vhost_options *pvo;
 	struct lws_acme_cert_aging_args *caa;
 	struct acme_connection *ac = NULL;
 	struct lws_genhash_ctx hctx;
+	unsigned char **pp, *pend;
+	const char *content_type;
+	struct lws_jwe jwe;
 	struct lws *cwsi;
 	int n, m;
 
 	if (vhd)
 		ac = vhd->ac;
+
+	lws_jwe_init(&jwe, lws_get_context(wsi));
 
 	switch ((int)reason) {
 	case LWS_CALLBACK_PROTOCOL_INIT:
@@ -585,7 +589,7 @@ callback_acme_client(struct lws *wsi, enum lws_callback_reasons reason,
 			memcpy(start, pvo->value, n);
 			p += n;
 
-			for (m = 0; m < (int)ARRAY_SIZE(pvo_names); m++)
+			for (m = 0; m < (int)LWS_ARRAY_SIZE(pvo_names); m++)
 				if (!strcmp(pvo->name, pvo_names[m]))
 					vhd->pvop[m] = start;
 
@@ -593,7 +597,7 @@ callback_acme_client(struct lws *wsi, enum lws_callback_reasons reason,
 		}
 
 		n = 0;
-		for (m = 0; m < (int)ARRAY_SIZE(pvo_names); m++)
+		for (m = 0; m < (int)LWS_ARRAY_SIZE(pvo_names); m++)
 			if (!vhd->pvop[m] && m >= LWS_TLS_REQ_ELEMENT_COMMON_NAME) {
 				lwsl_notice("%s: require pvo '%s'\n", __func__,
 						pvo_names[m]);
@@ -623,7 +627,7 @@ callback_acme_client(struct lws *wsi, enum lws_callback_reasons reason,
 		 */
 		lws_snprintf(buf, sizeof(buf) - 1, "%s.upd",
 			     vhd->pvop[LWS_TLS_SET_CERT_PATH]);
-		vhd->fd_updated_cert = open(buf, LWS_O_WRONLY | LWS_O_CREAT |
+		vhd->fd_updated_cert = lws_open(buf, LWS_O_WRONLY | LWS_O_CREAT |
 						 LWS_O_TRUNC, 0600);
 		if (vhd->fd_updated_cert < 0) {
 			lwsl_err("unable to create update cert file %s\n", buf);
@@ -631,7 +635,7 @@ callback_acme_client(struct lws *wsi, enum lws_callback_reasons reason,
 		}
 		lws_snprintf(buf, sizeof(buf) - 1, "%s.upd",
 			     vhd->pvop[LWS_TLS_SET_KEY_PATH]);
-		vhd->fd_updated_key = open(buf, LWS_O_WRONLY | LWS_O_CREAT |
+		vhd->fd_updated_key = lws_open(buf, LWS_O_WRONLY | LWS_O_CREAT |
 						LWS_O_TRUNC, 0600);
 		if (vhd->fd_updated_key < 0) {
 			lwsl_err("unable to create update key file %s\n", buf);
@@ -669,7 +673,7 @@ callback_acme_client(struct lws *wsi, enum lws_callback_reasons reason,
 		if (vhd->vhost != caa->vh)
 			return 1;
 
-		for (n = 0; n < (int)ARRAY_SIZE(vhd->pvop);n++)
+		for (n = 0; n < (int)LWS_ARRAY_SIZE(vhd->pvop);n++)
 			if (caa->element_overrides[n])
 				vhd->pvop_active[n] = caa->element_overrides[n];
 			else
@@ -720,19 +724,19 @@ callback_acme_client(struct lws *wsi, enum lws_callback_reasons reason,
 		switch (ac->state) {
 		case ACME_STATE_DIRECTORY:
 			lejp_construct(&ac->jctx, cb_dir, vhd, jdir_tok,
-				       ARRAY_SIZE(jdir_tok));
+				       LWS_ARRAY_SIZE(jdir_tok));
 			break;
 		case ACME_STATE_NEW_REG:
 			break;
 		case ACME_STATE_NEW_AUTH:
 			lejp_construct(&ac->jctx, cb_authz, ac, jauthz_tok,
-				       ARRAY_SIZE(jauthz_tok));
+					LWS_ARRAY_SIZE(jauthz_tok));
 			break;
 
 		case ACME_STATE_POLLING:
 		case ACME_STATE_ACCEPT_CHALL:
 			lejp_construct(&ac->jctx, cb_chac, ac, jchac_tok,
-				       ARRAY_SIZE(jchac_tok));
+					LWS_ARRAY_SIZE(jchac_tok));
 			break;
 
 		case ACME_STATE_POLLING_CSR:
@@ -781,15 +785,22 @@ callback_acme_client(struct lws *wsi, enum lws_callback_reasons reason,
 
 			puts(start);
 pkt_add_hdrs:
-			ac->len = lws_jws_create_packet(&vhd->jwk,
+			if (lws_gencrypto_jwe_alg_to_definition("RSA1_5", &jwe.jose.alg)) {
+				ac->len = 0;
+				lwsl_notice("%s: no RSA1_5\n", __func__);
+				goto failed;
+			}
+			jwe.jws.jwk = &vhd->jwk;
+			ac->len = lws_jwe_create_packet(&jwe,
 							start, p - start,
 							ac->replay_nonce,
 							&ac->buf[LWS_PRE],
 							sizeof(ac->buf) -
-								 LWS_PRE);
+								 LWS_PRE,
+							lws_get_context(wsi));
 			if (ac->len < 0) {
 				ac->len = 0;
-				lwsl_notice("lws_jws_create_packet failed\n");
+				lwsl_notice("lws_jwe_create_packet failed\n");
 				goto failed;
 			}
 
@@ -1598,7 +1609,7 @@ init_protocol_lws_acme_client(struct lws_context *context,
 	}
 
 	c->protocols = protocols;
-	c->count_protocols = ARRAY_SIZE(protocols);
+	c->count_protocols = LWS_ARRAY_SIZE(protocols);
 	c->extensions = NULL;
 	c->count_extensions = 0;
 

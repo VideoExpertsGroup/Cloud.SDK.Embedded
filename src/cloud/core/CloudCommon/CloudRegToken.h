@@ -11,31 +11,34 @@
 using namespace std;
 
 class CloudRegToken : public CUnk {
-	const char *TAG = "CloudRegToken";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+//	const char *TAG;
+//	const int LOG_LEVEL;
 	MLog Log;
 
-    string mToken;
-    string mExpire;
-    string mType;
-    string mStatus;
-    string mRtmpPublish;
-    long long mCmngrID;
+	string mToken;
+	string mExpire;
+	string mType;
+	string mStatus;
+	string mRtmpPublish;
+	long long mCmngrID;
 
 public:
 
 	CloudRegToken()
-		:Log(TAG, LOG_LEVEL)
+		:Log("CloudRegToken", 2)
 	{
 		mCmngrID = 0;
-
+//		TAG = "CloudRegToken";
+//		LOG_LEVEL = 2; //Log.VERBOSE;
 		// nothing
 	}
 
     CloudRegToken(string json_data)
-		:Log(TAG, LOG_LEVEL)
+		:Log("CloudRegToken", 2)
 	{
 		mCmngrID = 0;
+//		TAG = "CloudRegToken";
+//		LOG_LEVEL = 2; //Log.VERBOSE;
 
 		json_error_t err;
 		json_t *root = json_loads(json_data.c_str(), 0, &err);
@@ -61,6 +64,8 @@ public:
 		p = json_string_value(json_object_get(root, "rtmp"));
 		if (p)
 			mRtmpPublish = p;
+
+		json_decref(root);
 
     }
 

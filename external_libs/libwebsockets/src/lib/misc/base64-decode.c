@@ -55,12 +55,11 @@ _lws_b64_encode_string(const char *encode, const char *in, int in_len,
 {
 	unsigned char triple[3];
 	int i;
-	int len;
 	int line = 0;
 	int done = 0;
 
 	while (in_len) {
-		len = 0;
+		int len = 0;
 		for (i = 0; i < 3; i++) {
 			if (in_len) {
 				triple[i] = *in++;
@@ -145,7 +144,7 @@ _lws_b64_decode_string(const char *in, int in_len, char *out, int out_size)
 				quad[i] = 0;
 		}
 
-		if (out_size < (done + len - 1))
+		if (out_size < (done + len + 1))
 			/* out buffer is too small */
 			return -1;
 

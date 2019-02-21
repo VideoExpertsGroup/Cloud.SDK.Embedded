@@ -27,6 +27,7 @@ namespace CameraManagerParams {
 	const char * BRAND = "brand";
 	const char * MODEL = "model";
 	const char * SN = "sn";
+	const char * MOTION_INFO = "motion_info";
 	const char * VERSION = "version";
 	const char * MEDIA_URL = "media_url";
 	const char * MEDIA_URI = "media_uri";
@@ -84,5 +85,8 @@ namespace CameraManagerParams {
 	const char * REGIONS = "regions";
 	const char * SIZE = "size";
 	const char * FREE = "free";
+	const char * RAW_MESSAGING = "raw_messaging";
+	const char * RAW_MESSAGE = "message";
+	const char * ERROR_DESCRIPTION = "error_description";
 }
 #endif //__CAMERAMANAGERPARAMS_H__

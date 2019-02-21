@@ -21,12 +21,14 @@
 #include <libwebsockets.h>
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(LWS_HAS_GETOPT_LONG) || defined(WIN32)
 #include <getopt.h>
+#endif
 #include <signal.h>
 
 int close_testing;
 int max_poll_elements;
-int debug_level = 7;
+int debug_level = LLL_USER | 7;
 
 #ifdef EXTERNAL_POLL
 struct lws_pollfd *pollfds;
@@ -106,10 +108,13 @@ lws_callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 				continue;
 			}
 
-			lws_hdr_copy(wsi, buf, sizeof buf, n);
-			buf[sizeof(buf) - 1] = '\0';
+			if (lws_hdr_copy(wsi, buf, sizeof buf, n) < 0)
+				fprintf(stderr, "    %s (too big)\n", (char *)c);
+			else {
+				buf[sizeof(buf) - 1] = '\0';
 
-			fprintf(stderr, "    %s = %s\n", (char *)c, buf);
+				fprintf(stderr, "    %s = %s\n", (char *)c, buf);
+			}
 			n++;
 		} while (c);
 
@@ -295,6 +300,7 @@ static const struct lws_protocol_vhost_options pvo = {
 	""				/* ignored */
 };
 
+#if defined(LWS_HAS_GETOPT_LONG) || defined(WIN32)
 static struct option options[] = {
 	{ "help",	no_argument,		NULL, 'h' },
 	{ "debug",	required_argument,	NULL, 'd' },
@@ -317,10 +323,10 @@ static struct option options[] = {
 #ifndef LWS_NO_DAEMONIZE
 	{ "daemonize",	no_argument,		NULL, 'D' },
 #endif
-	{ "resource_path", required_argument,	NULL, 'r' },
 	{ "pingpong-secs", required_argument,	NULL, 'P' },
 	{ NULL, 0, 0, 0 }
 };
+#endif
 
 int main(int argc, char **argv)
 {
@@ -351,7 +357,11 @@ int main(int argc, char **argv)
 	info.port = 7681;
 
 	while (n >= 0) {
-		n = getopt_long(argc, argv, "eci:hsap:d:Dr:C:K:A:R:vu:g:P:kU:n", options, NULL);
+#if defined(LWS_HAS_GETOPT_LONG) || defined(WIN32)
+		n = getopt_long(argc, argv, "eci:hsap:d:DC:K:A:R:vu:g:P:kU:n", options, NULL);
+#else
+		n = getopt(argc, argv, "eci:hsap:d:DC:K:A:R:vu:g:P:kU:n");
+#endif
 		if (n < 0)
 			continue;
 		switch (n) {
@@ -361,9 +371,6 @@ int main(int argc, char **argv)
 #ifndef LWS_NO_DAEMONIZE
 		case 'D':
 			daemonize = 1;
-			#if !defined(_WIN32) && !defined(__sun)
-			syslog_options &= ~LOG_PERROR;
-			#endif
 			break;
 #endif
 		case 'u':
@@ -411,10 +418,6 @@ int main(int argc, char **argv)
 					   "client after 50 dumb increments"
 					   "and suppresses lws_mirror spam\n");
 			break;
-		case 'r':
-			resource_path = optarg;
-			printf("Setting resource path to \"%s\"\n", resource_path);
-			break;
 		case 'C':
 			lws_strncpy(cert_path, optarg, sizeof(cert_path));
 			break;
@@ -443,8 +446,7 @@ int main(int argc, char **argv)
 		case 'h':
 			fprintf(stderr, "Usage: test-server "
 					"[--port=<p>] [--ssl] "
-					"[-d <log bitfield>] "
-					"[--resource_path <path>]\n");
+					"[-d <log bitfield>]\n");
 			exit(1);
 		}
 	}
@@ -532,7 +534,7 @@ int main(int argc, char **argv)
 			       "!AES256-SHA256";
 	info.mounts = &mount;
 	info.ip_limit_ah = 24; /* for testing */
-	info.ip_limit_wsi = 105; /* for testing */
+	info.ip_limit_wsi = 400; /* for testing */
 
 	if (use_ssl)
 		/* redirect guys coming on http */

@@ -89,9 +89,13 @@ int main(int argc, const char **argv)
 	memset(&info, 0, sizeof info); /* otherwise uninitialized garbage */
 	info.port = 7681;
 	info.mounts = &mount;
-	if ((p = lws_cmdline_option(argc, argv, "-t")))
+	info.options =
+		LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+	if ((p = lws_cmdline_option(argc, argv, "-t"))) {
 		info.count_threads = atoi(p);
-	else
+		if (info.count_threads < 1 || info.count_threads > LWS_MAX_SMP)
+			return 1;
+	} else
 		info.count_threads = COUNT_THREADS;
 
 	if (lws_cmdline_option(argc, argv, "-s")) {

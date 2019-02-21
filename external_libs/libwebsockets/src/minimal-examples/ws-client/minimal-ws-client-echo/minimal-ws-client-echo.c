@@ -22,6 +22,7 @@ static struct lws_protocols protocols[] = {
 	{ NULL, NULL, 0, 0 } /* terminator */
 };
 
+static struct lws_context *context;
 static int interrupted, port = 7681, options = 0;
 static const char *url = "/", *ads = "localhost";
 
@@ -87,17 +88,14 @@ void sigint_handler(int sig)
 int main(int argc, const char **argv)
 {
 	struct lws_context_creation_info info;
-	struct lws_context *context;
 	const char *p;
-	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE
+	int n, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE
 			/* for LLL_ verbosity above NOTICE to be built into lws,
 			 * lws must have been configured and built with
 			 * -DCMAKE_BUILD_TYPE=DEBUG instead of =RELEASE */
 			/* | LLL_INFO */ /* | LLL_PARSER */ /* | LLL_HEADER */
 			/* | LLL_EXT */ /* | LLL_CLIENT */ /* | LLL_LATENCY */
 			/* | LLL_DEBUG */;
-
-	signal(SIGINT, sigint_handler);
 
 	if ((p = lws_cmdline_option(argc, argv, "-d")))
 		logs = atoi(p);
@@ -115,7 +113,13 @@ int main(int argc, const char **argv)
 	if (lws_cmdline_option(argc, argv, "-o"))
 		options |= 1;
 
-	lwsl_user("options %d\n", options);
+	if (lws_cmdline_option(argc, argv, "--ssl"))
+		options |= 2;
+
+	if ((p = lws_cmdline_option(argc, argv, "-s")))
+		ads = p;
+
+	lwsl_user("options %d, ads %s\n", options, ads);
 
 	memset(&info, 0, sizeof info); /* otherwise uninitialized garbage */
 	info.port = CONTEXT_PORT_NO_LISTEN;
@@ -124,7 +128,13 @@ int main(int argc, const char **argv)
 	if (!lws_cmdline_option(argc, argv, "-n"))
 		info.extensions = extensions;
 	info.pt_serv_buf_size = 32 * 1024;
-	info.options = LWS_SERVER_OPTION_VALIDATE_UTF8;
+	info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT |
+		       LWS_SERVER_OPTION_VALIDATE_UTF8;
+
+	if (lws_cmdline_option(argc, argv, "--libuv"))
+		info.options |= LWS_SERVER_OPTION_LIBUV;
+	else
+		signal(SIGINT, sigint_handler);
 
 	context = lws_create_context(&info);
 	if (!context) {
@@ -132,12 +142,13 @@ int main(int argc, const char **argv)
 		return 1;
 	}
 
-	while (n >= 0 && !interrupted)
-		n = lws_service(context, 1000);
+	while (!lws_service(context, 1000) && !interrupted)
+		;
 
 	lws_context_destroy(context);
 
-	lwsl_user("Completed %s\n", interrupted == 2 ? "OK" : "failed");
+	n = (options & 1) ? interrupted != 2 : interrupted == 3;
+	lwsl_user("Completed %d %s\n", interrupted, !n ? "OK" : "failed");
 
-	return interrupted != 2;
+	return n;
 }

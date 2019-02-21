@@ -2,6 +2,7 @@
 #define __MLOG_H__
 
 #include "utils.h"
+#include "FileRing.h"
 
 enum LogLevel {
 	LOGLEVEL_ASSERT = 7,
@@ -21,6 +22,9 @@ public:
 	static LogLevel globalLevel;
 	static bool isSignedWithDebugKey;
 	static int ndbgFile;
+	static char FileName[256];
+	static int nMaxLogFileSize;
+	static CFileRing m_fr;
 
 	static void setLogEnable(bool b);
 
@@ -28,6 +32,8 @@ public:
 	MLog(const char *tag, int level, const char * filename);
 	MLog(std::string &tag, int level);
 	MLog(std::string &tag, int level, const char * filename);
+
+	int GetLogData(unsigned char** pData, unsigned int* nSize);
 
 	void v(const char *fmt, ...) {
 		va_list vl;
@@ -71,6 +77,13 @@ public:
 		if (signedWithDebug() && level <= LOGLEVEL_ERROR) {
 			dbg(level, tag.c_str(), fmt, vl);
 		}
+		va_end(vl);
+	}
+
+	void ff(const char *fmt, ...) {
+		va_list vl;
+		va_start(vl, fmt);
+		dbg(level, "", fmt, vl);
 		va_end(vl);
 	}
 

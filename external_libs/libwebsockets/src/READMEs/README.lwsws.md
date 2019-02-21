@@ -213,7 +213,7 @@ to be selected using "raw": "1"
 	     }]
 ```
 
-See also "rawonly" below.
+See also "apply-listen-accept" below.
 
 @section lwswsovo Lwsws Other vhost options
 
@@ -233,9 +233,15 @@ See also "rawonly" below.
 
  - `"enable-client-ssl"`: `"1"` enables the vhost's client SSL context, you will need this if you plan to create client conections on the vhost that will use SSL.  You don't need it if you only want http / ws client connections.
 
- - "`ciphers`": "<cipher list>"   sets the allowed list of ciphers and key exchange protocols for the vhost.  The default list is restricted to only those providing PFS (Perfect Forward Secrecy) on the author's Fedora system.
+ - "`ciphers`": "<cipher list>"  OPENSSL only: sets the allowed list of TLS <= 1.2 ciphers and key exchange protocols for the serving SSL_CTX on the vhost.  The default list is restricted to only those providing PFS (Perfect Forward Secrecy) on the author's Fedora system.
  
- If you need to allow weaker ciphers,you can provide an alternative list here per-vhost.
+ If you need to allow weaker ciphers, you can provide an alternative list here per-vhost.
+
+ - "`client-ssl-ciphers`": "<cipher list>"  OPENSSL only: sets the allowed list of <= TLS1.2 ciphers and key exchange protocols for the client SSL_CTX on the vhost
+
+ - "`tls13-ciphers`": "<cipher list>"  OPENSSL 1.1.1+ only: sets allowed list of TLS1.3+ ciphers and key exchange protocols for the client SSL_CTX on the vhost.  The default is to allow all.
+
+ - "`client-tls13-ciphers`": "<cipher list>"  OPENSSL 1.1.1+ only: sets the allowed list of TLS1.3+ ciphers and key exchange protocols for the client SSL_CTX on the vhost.  The default is to allow all.
  
  - "`ecdh-curve`": "<curve name>"   The default ecdh curve is "prime256v1", but you can override it here, per-vhost
 
@@ -259,6 +265,8 @@ See also "rawonly" below.
  - "`ssl-option-clear'": "<decimal>"   Clears the SSL option flag value for the vhost.
  It may be used multiple times and OR's the flags together.
 
+ - "`ssl-client-option-set`" and "`ssl-client-option-clear`" work the same way for the vhost Client SSL context
+
  - "`headers':: [{ "header1": "h1value", "header2": "h2value" }] 
 
 allows you to set arbitrary headers on every file served by the vhost
@@ -275,7 +283,7 @@ recommended vhost headers for good client security are
 
 ```
 
- - "`rawonly`": "on"  This vhost only serves a raw protocol, disable HTTP on it
+ - "`apply-listen-accept`": "on"  This vhost only serves a non-http protocol, specified in "listen-accept-role" and "listen-accept-protocol"
 
 @section lwswsm Lwsws Mounts
 
@@ -410,7 +418,7 @@ Content-Type: header.
 7) A mount can be protected by HTTP Basic Auth.  This only makes sense when using
 https, since otherwise the password can be sniffed.
 
-You can add a `basic-auth` entry on a mount like this
+You can add a `basic-auth` entry on an http mount like this
 
 ```
 {
@@ -436,6 +444,15 @@ The file should be readable by lwsws, and for a little bit of extra security not
 have a file suffix, so lws would reject to serve it even if it could find it on
 a mount.
 
+After successful authentication, `WSI_TOKEN_HTTP_AUTHORIZATION` contains the
+authenticated username.
+
+In the case you want to also protect being able to connect to a ws protocol on
+a particular vhost by requiring the http part can authenticate using Basic
+Auth before the ws upgrade, this is also possible.  In this case, the
+"basic-auth": and filepath to the credentials file is passed as a pvo in the
+"ws-protocols" section of the vhost definition.
+
 @section lwswscc Requiring a Client Cert on a vhost
 
 You can make a vhost insist to get a client certificate from the peer before
@@ -447,6 +464,57 @@ allowing the connection with
 
 the connection will only proceed if the client certificate was signed by the
 same CA as the server has been told to trust.
+
+@section rawconf Configuring Fallback and Raw vhosts
+
+Lws supports some unusual modes for vhost listen sockets, which may be
+configured entirely using the JSON per-vhost config language in the related
+vhost configuration section.
+
+There are three main uses for them
+
+1) A vhost bound to a specific role and protocol, not http.  This binds all
+incoming connections on the vhost listen socket to the "raw-proxy" role and
+protocol "myprotocol".
+
+```
+	"listen-accept-role":		"raw-proxy",
+	"listen-accept-protocol":	"myprotocol",
+	"apply-listen-accept":		"1"
+```
+
+2) A vhost that wants to treat noncompliant connections for http or https as
+   belonging to a secondary fallback role and protocol.  This causes non-https
+   connections to an https listener to stop being treated as https, to lose the
+   tls wrapper, and bind to role "raw-proxy" and protocol "myprotocol".  For
+   example, connect a browser on your external IP :443 as usual and it serves
+   as normal, but if you have configured the raw-proxy to portforward
+   127.0.0.1:22, then connecting your ssh client to your external port 443 will
+   instead proxy your sshd over :443 with no http or tls getting in the way.
+
+```
+	"listen-accept-role":		"raw-proxy",
+	"listen-accept-protocol":	"myprotocol",
+	"fallback-listen-accept":	"1",
+	"allow-non-tls":		"1"
+```
+
+3) A vhost wants to either redirect stray http traffic back to https, or to
+   actually serve http on an https listen socket (this is not recommended
+   since it allows anyone to drop the security assurances of https by
+   accident or design).
+
+```
+	"allow-non-tls":		"1",
+	"redirect-http":		"1",
+```
+
+...or,
+
+```
+	"allow-non-tls":		"1",
+	"allow-http-on-https":		"1",
+```
 
 @section lwswspl Lwsws Plugins
 

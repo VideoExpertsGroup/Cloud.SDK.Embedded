@@ -41,8 +41,8 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 	      void *in, size_t len)
 {
 	struct pss *pss = (struct pss *)user;
-	uint8_t buf[LWS_PRE + 256], *start = &buf[LWS_PRE], *p = start,
-		*end = &buf[sizeof(buf) - 1];
+	uint8_t buf[LWS_PRE + LWS_RECOMMENDED_MIN_HEADER_SPACE], *start = &buf[LWS_PRE],
+		*p = start, *end = &buf[sizeof(buf) - 1];
 	int n;
 
 	switch (reason) {
@@ -69,7 +69,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 
 		if (!pss->spa) {
 			pss->spa = lws_spa_create(wsi, param_names,
-					ARRAY_SIZE(param_names), 1024,
+					LWS_ARRAY_SIZE(param_names), 1024,
 					NULL, NULL); /* no file upload */
 			if (!pss->spa)
 				return -1;
@@ -89,7 +89,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 
 		/* we just dump the decoded things to the log */
 
-		for (n = 0; n < (int)ARRAY_SIZE(param_names); n++) {
+		for (n = 0; n < (int)LWS_ARRAY_SIZE(param_names); n++) {
 			if (!lws_spa_get_string(pss->spa, n))
 				lwsl_user("%s: undefined\n", param_names[n]);
 			else
@@ -182,6 +182,8 @@ int main(int argc, const char **argv)
 	info.port = 7681;
 	info.protocols = protocols;
 	info.mounts = &mount;
+	info.options =
+		LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
 
 	context = lws_create_context(&info);
 	if (!context) {

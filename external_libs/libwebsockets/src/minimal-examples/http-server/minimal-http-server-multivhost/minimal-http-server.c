@@ -80,6 +80,11 @@ void sigint_handler(int sig)
 	interrupted = 1;
 }
 
+void vh_destruction_notification(struct lws_vhost *vh, void *arg)
+{
+	lwsl_user("%s: called, arg: %p\n", __func__, arg);
+}
+
 int main(int argc, const char **argv)
 {
 	struct lws_context_creation_info info;
@@ -102,7 +107,8 @@ int main(int argc, const char **argv)
 	signal(SIGINT, sigint_handler);
 
 	memset(&info, 0, sizeof info); /* otherwise uninitialized garbage */
-	info.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS;
+	info.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS |
+		LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
 
 	/*
 	 * Because of LWS_SERVER_OPTION_EXPLICIT_VHOSTS, this only creates
@@ -150,9 +156,16 @@ int main(int argc, const char **argv)
 	info.mounts = &mount_localhost3;
 	info.error_document_404 = "/404.html";
 	info.vhost_name = "localhost3";
+	info.finalize = vh_destruction_notification;
+	info.finalize_arg = NULL;
 
 	if (!lws_create_vhost(context, &info)) {
 		lwsl_err("Failed to create third vhost\n");
+		goto bail;
+	}
+
+	if (lws_cmdline_option(argc, argv, "--die-after-vhost")) {
+		lwsl_warn("bailing after creating vhosts\n");
 		goto bail;
 	}
 

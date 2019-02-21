@@ -32,6 +32,11 @@ rops_handle_POLLIN_listen(struct lws_context_per_thread *pt, struct lws *wsi,
 	struct sockaddr_storage cli_addr;
 	socklen_t clilen;
 
+	/* if our vhost is going down, ignore it */
+
+	if (wsi->vhost->being_destroyed)
+		return LWS_HPI_RET_HANDLED;
+
 	/* pollin means a client has connected to us then
 	 *
 	 * pollout is a hack on esp32 for background accepts signalling
@@ -74,8 +79,8 @@ rops_handle_POLLIN_listen(struct lws_context_per_thread *pt, struct lws *wsi,
 		 * block the connect queue for other legit peers.
 		 */
 
-		accept_fd  = accept((int)pollfd->fd,
-				    (struct sockaddr *)&cli_addr, &clilen);
+		accept_fd = accept((int)pollfd->fd,
+				   (struct sockaddr *)&cli_addr, &clilen);
 		lws_latency(context, wsi, "listener accept",
 			    (int)accept_fd, accept_fd != LWS_SOCK_INVALID);
 		if (accept_fd == LWS_SOCK_INVALID) {
@@ -83,12 +88,11 @@ rops_handle_POLLIN_listen(struct lws_context_per_thread *pt, struct lws *wsi,
 			    LWS_ERRNO == LWS_EWOULDBLOCK) {
 				break;
 			}
-			lwsl_err("ERROR on accept: %s\n",
-				 strerror(LWS_ERRNO));
-			break;
+			lwsl_err("accept: %s\n", strerror(LWS_ERRNO));
+			return LWS_HPI_RET_HANDLED;
 		}
 
-		lws_plat_set_socket_options(wsi->vhost, accept_fd);
+		lws_plat_set_socket_options(wsi->vhost, accept_fd, 0);
 
 #if defined(LWS_WITH_IPV6)
 		lwsl_debug("accepted new conn port %u on fd=%d\n",
@@ -117,7 +121,8 @@ rops_handle_POLLIN_listen(struct lws_context_per_thread *pt, struct lws *wsi,
 			break;
 		}
 
-		if (!(wsi->vhost->options & LWS_SERVER_OPTION_ONLY_RAW))
+		if (!(wsi->vhost->options &
+			LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG))
 			opts |= LWS_ADOPT_HTTP;
 		else
 			opts = LWS_ADOPT_SOCKET;
@@ -125,9 +130,12 @@ rops_handle_POLLIN_listen(struct lws_context_per_thread *pt, struct lws *wsi,
 		fd.sockfd = accept_fd;
 		cwsi = lws_adopt_descriptor_vhost(wsi->vhost, opts, fd,
 						  NULL, NULL);
-		if (!cwsi)
+		if (!cwsi) {
+			lwsl_err("%s: lws_adopt_descriptor_vhost failed\n",
+					__func__);
 			/* already closed cleanly as necessary */
 			return LWS_HPI_RET_WSI_ALREADY_DIED;
+		}
 
 		if (lws_server_socket_service_ssl(cwsi, accept_fd)) {
 			lws_close_free_wsi(cwsi, LWS_CLOSE_STATUS_NOSTATUS,
@@ -173,7 +181,11 @@ struct lws_role_ops role_ops_listen = {
 	/* destroy_role */		NULL,
 	/* adoption_bind */		NULL,
 	/* client_bind */		NULL,
+	/* adoption_cb clnt, srv */	{ 0, 0 },
+	/* rx_cb clnt, srv */		{ 0, 0 },
 	/* writeable cb clnt, srv */	{ 0, 0 },
 	/* close cb clnt, srv */	{ 0, 0 },
+	/* protocol_bind_cb c,s */	{ 0, 0 },
+	/* protocol_unbind_cb c,s */	{ 0, 0 },
 	/* file_handle */		0,
 };

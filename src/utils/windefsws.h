@@ -52,6 +52,7 @@ extern void LeaveCriticalSection(CRITICAL_SECTION* lock);
 extern HANDLE CreateThread(void* pSecAttr, size_t nStackSize, LPTHREAD_START_ROUTINE lpStartAddress, void* lpParameter, DWORD dwFlags, DWORD* lpThreadId);
 extern BOOL TerminateThread(HANDLE hThread, DWORD dwExitCode);
 extern DWORD timeGetTime();
+extern DWORD GetCurrentThreadId();
 
 long	InterlockedIncrement(long *lpAddend);
 long	InterlockedDecrement(long *lpAddend);

@@ -56,7 +56,8 @@ lws_context_init_alpn(struct lws_vhost *vhost)
 					vhost->tls.alpn_ctx.data,
 					sizeof(vhost->tls.alpn_ctx.data) - 1);
 
-	SSL_CTX_set_alpn_select_cb(vhost->tls.ssl_ctx, alpn_cb, &vhost->tls.alpn_ctx);
+	SSL_CTX_set_alpn_select_cb(vhost->tls.ssl_ctx, alpn_cb,
+				   &vhost->tls.alpn_ctx);
 #else
 	lwsl_err(
 		" HTTP2 / ALPN configured but not supported by OpenSSL 0x%lx\n",
@@ -139,7 +140,7 @@ lws_context_init_server_ssl(const struct lws_context_creation_info *info,
 	 * lws_get_context() in the callback
 	 */
 	memset(&wsi, 0, sizeof(wsi));
-	wsi.vhost = vhost;
+	wsi.vhost = vhost; /* not a real bound wsi */
 	wsi.context = context;
 
 	/*
@@ -177,10 +178,10 @@ LWS_VISIBLE int
 lws_server_socket_service_ssl(struct lws *wsi, lws_sockfd_type accept_fd)
 {
 	struct lws_context *context = wsi->context;
-	struct lws_vhost *vh;
 	struct lws_context_per_thread *pt = &context->pt[(int)wsi->tsi];
-	int n;
+	struct lws_vhost *vh;
         char buf[256];
+	int n;
 
         (void)buf;
 
@@ -251,12 +252,31 @@ lws_server_socket_service_ssl(struct lws *wsi, lws_sockfd_type accept_fd)
 			n = recv(wsi->desc.sockfd, (char *)pt->serv_buf,
 				 context->pt_serv_buf_size, MSG_PEEK);
 
-		/*
-		 * optionally allow non-SSL connect on SSL listening socket
-		 * This is disabled by default, if enabled it goes around any
-		 * SSL-level access control (eg, client-side certs) so leave
-		 * it disabled unless you know it's not a problem for you
-		 */
+			/*
+			 * We have LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT..
+			 * this just means don't hang up on him because of no
+			 * tls hello... what happens next is driven by
+			 * additional option flags:
+			 *
+			 * none: fail the connection
+			 *
+			 * LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS:
+			 *     Destroy the TLS, issue a redirect using plaintext
+			 *     http (this may not be accepted by a client that
+			 *     has visited the site before and received an STS
+			 *     header).
+			 *
+			 * LWS_SERVER_OPTION_ALLOW_HTTP_ON_HTTPS_LISTENER:
+			 *     Destroy the TLS, continue and serve normally
+			 *     using http
+			 *
+			 * LWS_SERVER_OPTION_FALLBACK_TO_APPLY_LISTEN_ACCEPT_CONFIG:
+			 *     Destroy the TLS, apply whatever role and protocol
+			 *     were told in the vhost info struct
+			 *     .listen_accept_role / .listen_accept_protocol and
+			 *     continue with that
+			 */
+
 			if (n >= 1 && pt->serv_buf[0] >= ' ') {
 				/*
 				* TLS content-type for Handshake is 0x16, and
@@ -272,16 +292,40 @@ lws_server_socket_service_ssl(struct lws *wsi, lws_sockfd_type accept_fd)
 
 				lws_tls_server_abort_connection(wsi);
 				/*
-				 * care... this creates wsi with no ssl
-				 * when ssl is enabled and normally
-				 * mandatory
+				 * care... this creates wsi with no ssl when ssl
+				 * is enabled and normally mandatory
 				 */
 				wsi->tls.ssl = NULL;
-				if (lws_check_opt(context->options,
-				    LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS))
+
+				if (lws_check_opt(wsi->vhost->options,
+				    LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS)) {
+					lwsl_info("%s: redirecting from http "
+						  "to https\n", __func__);
 					wsi->tls.redirect_to_https = 1;
-				lwsl_debug("accepted as non-ssl\n");
-				goto accepted;
+					goto notls_accepted;
+				}
+
+				if (lws_check_opt(wsi->vhost->options,
+				LWS_SERVER_OPTION_ALLOW_HTTP_ON_HTTPS_LISTENER)) {
+					lwsl_info("%s: allowing unencrypted "
+						  "http service on tls port\n",
+						  __func__);
+					goto notls_accepted;
+				}
+
+				if (lws_check_opt(wsi->vhost->options,
+		    LWS_SERVER_OPTION_FALLBACK_TO_APPLY_LISTEN_ACCEPT_CONFIG)) {
+					if (lws_http_to_fallback(wsi, NULL, 0))
+						goto fail;
+					lwsl_info("%s: allowing non-tls "
+						  "fallback\n", __func__);
+					goto notls_accepted;
+				}
+
+				lwsl_notice("%s: client did not send a valid "
+					    "tls hello (default vhost %s)\n",
+					    __func__, wsi->vhost->name);
+				goto fail;
 			}
 			if (!n) {
 				/*
@@ -312,12 +356,14 @@ lws_server_socket_service_ssl(struct lws *wsi, lws_sockfd_type accept_fd)
 		/* normal SSL connection processing path */
 
 #if defined(LWS_WITH_STATS)
+		/* only set this the first time around */
 		if (!wsi->accept_start_us)
-			wsi->accept_start_us = time_in_microseconds();
+			wsi->accept_start_us = lws_time_in_microseconds();
 #endif
 		errno = 0;
 		lws_stats_atomic_bump(wsi->context, pt,
-				      LWSSTATS_C_SSL_CONNECTIONS_ACCEPT_SPIN, 1);
+				      LWSSTATS_C_SSL_CONNECTIONS_ACCEPT_SPIN,
+				      1);
 		n = lws_tls_server_accept(wsi);
 		lws_latency(context, wsi,
 			"SSL_accept LRS_SSL_ACK_PENDING\n", n, n == 1);
@@ -327,7 +373,8 @@ lws_server_socket_service_ssl(struct lws *wsi, lws_sockfd_type accept_fd)
 			break;
 		case LWS_SSL_CAPABLE_ERROR:
 			lws_stats_atomic_bump(wsi->context, pt,
-					      LWSSTATS_C_SSL_CONNECTIONS_FAILED, 1);
+					      LWSSTATS_C_SSL_CONNECTIONS_FAILED,
+					      1);
 	                lwsl_info("SSL_accept failed socket %u: %d\n",
 	                		wsi->desc.sockfd, n);
 			wsi->socket_is_permanently_unusable = 1;
@@ -340,13 +387,13 @@ lws_server_socket_service_ssl(struct lws *wsi, lws_sockfd_type accept_fd)
 		lws_stats_atomic_bump(wsi->context, pt,
 				      LWSSTATS_C_SSL_CONNECTIONS_ACCEPTED, 1);
 #if defined(LWS_WITH_STATS)
-		lws_stats_atomic_bump(wsi->context, pt,
+		if (wsi->accept_start_us)
+			lws_stats_atomic_bump(wsi->context, pt,
 				      LWSSTATS_MS_SSL_CONNECTIONS_ACCEPTED_DELAY,
-				      time_in_microseconds() - wsi->accept_start_us);
-		wsi->accept_start_us = time_in_microseconds();
+				      lws_time_in_microseconds() -
+					      wsi->accept_start_us);
+		wsi->accept_start_us = lws_time_in_microseconds();
 #endif
-
-accepted:
 
 		/* adapt our vhost to match the SNI SSL_CTX that was chosen */
 		vh = context->vhost_list;
@@ -354,7 +401,7 @@ accepted:
 			if (!vh->being_destroyed && wsi->tls.ssl &&
 			    vh->tls.ssl_ctx == lws_tls_ctx_from_wsi(wsi)) {
 				lwsl_info("setting wsi to vh %s\n", vh->name);
-				wsi->vhost = vh;
+				lws_vhost_bind_wsi(vh, wsi);
 				break;
 			}
 			vh = vh->vhost_next;
@@ -373,6 +420,11 @@ accepted:
 	default:
 		break;
 	}
+
+	return 0;
+
+notls_accepted:
+	lwsi_set_state(wsi, LRS_ESTABLISHED);
 
 	return 0;
 

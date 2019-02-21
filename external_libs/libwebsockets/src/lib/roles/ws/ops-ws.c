@@ -155,7 +155,9 @@ handle_first:
 			if (wsi->ws->opcode == LWSWSOPC_BINARY_FRAME)
 				wsi->ws->check_utf8 = 0;
 			if (wsi->ws->continuation_possible) {
-				lws_close_reason(wsi, LWS_CLOSE_STATUS_PROTOCOL_ERR, (uint8_t *)"bad cont", 8);
+				lws_close_reason(wsi,
+					LWS_CLOSE_STATUS_PROTOCOL_ERR,
+					(uint8_t *)"bad cont", 8);
 				return -1;
 			}
 			wsi->ws->rsv_first_msg = (c & 0x70);
@@ -166,7 +168,9 @@ handle_first:
 			break;
 		case LWSWSOPC_CONTINUATION:
 			if (!wsi->ws->continuation_possible) {
-				lws_close_reason(wsi, LWS_CLOSE_STATUS_PROTOCOL_ERR, (uint8_t *)"bad cont", 8);
+				lws_close_reason(wsi,
+					LWS_CLOSE_STATUS_PROTOCOL_ERR,
+					(uint8_t *)"bad cont", 8);
 				return -1;
 			}
 			break;
@@ -184,7 +188,8 @@ handle_first:
 		case 0xd:
 		case 0xe:
 		case 0xf:
-			lws_close_reason(wsi, LWS_CLOSE_STATUS_PROTOCOL_ERR, (uint8_t *)"bad opc", 7);
+			lws_close_reason(wsi, LWS_CLOSE_STATUS_PROTOCOL_ERR,
+					(uint8_t *)"bad opc", 7);
 			lwsl_info("illegal opcode\n");
 			return -1;
 		}
@@ -193,7 +198,8 @@ handle_first:
 		    (wsi->ws->opcode == LWSWSOPC_TEXT_FRAME ||
 		     wsi->ws->opcode == LWSWSOPC_BINARY_FRAME)) {
 			lwsl_info("hey you owed us a FIN\n");
-			lws_close_reason(wsi, LWS_CLOSE_STATUS_PROTOCOL_ERR, (uint8_t *)"bad fin", 7);
+			lws_close_reason(wsi, LWS_CLOSE_STATUS_PROTOCOL_ERR,
+					(uint8_t *)"bad fin", 7);
 			return -1;
 		}
 		if ((!(wsi->ws->opcode & 8)) && wsi->ws->final) {
@@ -373,17 +379,19 @@ handle_first:
 		}
 		if (!(already_processed & ALREADY_PROCESSED_IGNORE_CHAR)) {
 			if (wsi->ws->all_zero_nonce)
-				wsi->ws->rx_ubuf[LWS_PRE + (wsi->ws->rx_ubuf_head++)] =
-				   c;
+				wsi->ws->rx_ubuf[LWS_PRE +
+				                 (wsi->ws->rx_ubuf_head++)] = c;
 			else
-				wsi->ws->rx_ubuf[LWS_PRE + (wsi->ws->rx_ubuf_head++)] =
+				wsi->ws->rx_ubuf[LWS_PRE +
+				                 (wsi->ws->rx_ubuf_head++)] =
 				   c ^ wsi->ws->mask[(wsi->ws->mask_idx++) & 3];
 
 			--wsi->ws->rx_packet_length;
 		}
 
 		if (!wsi->ws->rx_packet_length) {
-			lwsl_debug("%s: ws fragment length exhausted\n", __func__);
+			lwsl_debug("%s: ws fragment length exhausted\n",
+				   __func__);
 			/* spill because we have the whole frame */
 			wsi->lws_rx_parse_state = LWS_RXPS_NEW;
 			goto spill;
@@ -451,7 +459,8 @@ spill:
 				 * have to just close our end.
 				 */
 				wsi->socket_is_permanently_unusable = 1;
-				lwsl_parser("Closing on peer close due to Pending tx\n");
+				lwsl_parser("Closing on peer close "
+					    "due to pending tx\n");
 				return -1;
 			}
 
@@ -570,7 +579,8 @@ drain_extension:
 		//if (lin)
 		//	lwsl_hexdump_notice(ebuf.token, ebuf.len);
 		n = lws_ext_cb_active(wsi, LWS_EXT_CB_PAYLOAD_RX, &ebuf, 0);
-		lwsl_debug("%s: ext says %d / ebuf.len %d\n", __func__,  n, ebuf.len);
+		lwsl_debug("%s: ext says %d / ebuf.len %d\n", __func__,
+			   n, ebuf.len);
 		if (wsi->ws->rx_draining_ext)
 			already_processed &= ~ALREADY_PROCESSED_NO_CB;
 #endif
@@ -813,9 +823,9 @@ LWS_VISIBLE int
 lws_is_final_fragment(struct lws *wsi)
 {
 #if !defined(LWS_WITHOUT_EXTENSIONS)
-       lwsl_debug("%s: final %d, rx pk length %ld, draining %ld\n", __func__,
-			wsi->ws->final, (long)wsi->ws->rx_packet_length,
-			(long)wsi->ws->rx_draining_ext);
+	lwsl_debug("%s: final %d, rx pk length %ld, draining %ld\n", __func__,
+		   wsi->ws->final, (long)wsi->ws->rx_packet_length,
+		   (long)wsi->ws->rx_draining_ext);
 	return wsi->ws->final && !wsi->ws->rx_packet_length &&
 	       !wsi->ws->rx_draining_ext;
 #else
@@ -882,8 +892,8 @@ static int
 rops_handle_POLLIN_ws(struct lws_context_per_thread *pt, struct lws *wsi,
 		       struct lws_pollfd *pollfd)
 {
-	struct lws_tokens ebuf;
 	unsigned int pending = 0;
+	struct lws_tokens ebuf;
 	char buffered = 0;
 	int n = 0, m;
 #if defined(LWS_WITH_HTTP2)
@@ -927,7 +937,9 @@ rops_handle_POLLIN_ws(struct lws_context_per_thread *pt, struct lws *wsi,
 		return LWS_HPI_RET_HANDLED;
 	}
 
-	//lwsl_notice("%s:  wsi->ws->tx_draining_ext %d revents 0x%x 0x%x %d\n", __func__,  wsi->ws->tx_draining_ext, pollfd->revents, wsi->wsistate, lwsi_state_can_handle_POLLOUT(wsi));
+	//lwsl_notice("%s:  wsi->ws->tx_draining_ext %d revents 0x%x 0x%x %d\n",
+	//__func__,  wsi->ws->tx_draining_ext, pollfd->revents, wsi->wsistate,
+	//lwsi_state_can_handle_POLLOUT(wsi));
 
 	/* 1: something requested a callback when it was OK to write */
 
@@ -976,7 +988,7 @@ rops_handle_POLLIN_ws(struct lws_context_per_thread *pt, struct lws *wsi,
 #if defined(LWS_WITH_HTTP2)
 	if (wsi->http2_substream || wsi->upgraded_to_http2) {
 		wsi1 = lws_get_network_wsi(wsi);
-		if (wsi1 && wsi1->trunc_len)
+		if (wsi1 && lws_has_buffered_out(wsi1))
 			/* We cannot deal with any kind of new RX
 			 * because we are dealing with a partial send
 			 * (new RX may trigger new http_action() that
@@ -1199,8 +1211,9 @@ int rops_handle_POLLOUT_ws(struct lws *wsi)
 		if (n >= 0) {
 			if (wsi->close_needs_ack) {
 				lwsi_set_state(wsi, LRS_AWAITING_CLOSE_ACK);
-				lws_set_timeout(wsi, PENDING_TIMEOUT_CLOSE_ACK, 5);
-				lwsl_debug("sent close indication, awaiting ack\n");
+				lws_set_timeout(wsi, PENDING_TIMEOUT_CLOSE_ACK,
+						5);
+				lwsl_debug("sent close, await ack\n");
 
 				return LWS_HP_RET_BAIL_OK;
 			}
@@ -1225,7 +1238,8 @@ int rops_handle_POLLOUT_ws(struct lws *wsi)
 				wsi->ws->ping_pending_flag = 0;
 				return LWS_HP_RET_BAIL_OK;
 			}
-			lwsl_info("issuing pong %d on wsi %p\n", wsi->ws->ping_payload_len, wsi);
+			lwsl_info("issuing pong %d on wsi %p\n",
+				  wsi->ws->ping_payload_len, wsi);
 		}
 
 		n = lws_write(wsi, &wsi->ws->ping_payload_buf[LWS_PRE],
@@ -1245,8 +1259,7 @@ int rops_handle_POLLOUT_ws(struct lws *wsi)
 		return LWS_HP_RET_BAIL_OK;
 	}
 
-	if (lwsi_role_client(wsi) && !wsi->socket_is_permanently_unusable &&
-	    wsi->ws->send_check_ping) {
+	if (!wsi->socket_is_permanently_unusable && wsi->ws->send_check_ping) {
 
 		lwsl_info("issuing ping on wsi %p\n", wsi);
 		wsi->ws->send_check_ping = 0;
@@ -1281,7 +1294,7 @@ int rops_handle_POLLOUT_ws(struct lws *wsi)
 	 *	       payload ordering, but since they are always complete
 	 *	       fragments control packets can interleave OK.
 	 */
-	if (lwsi_role_client(wsi) && wsi->ws->tx_draining_ext) {
+	if (wsi->ws->tx_draining_ext) {
 		lwsl_ext("SERVICING TX EXT DRAINING\n");
 		if (lws_write(wsi, NULL, 0, LWS_WRITE_CONTINUATION) < 0)
 			return LWS_HP_RET_BAIL_DIE;
@@ -1291,8 +1304,10 @@ int rops_handle_POLLOUT_ws(struct lws *wsi)
 
 	/* Priority 6: extensions
 	 */
-	if (!wsi->ws->extension_data_pending)
+	if (!wsi->ws->extension_data_pending && !wsi->ws->tx_draining_ext) {
+		lwsl_ext("%s: !wsi->ws->extension_data_pending\n", __func__);
 		return LWS_HP_RET_USER_SERVICE;
+	}
 
 	/*
 	 * check in on the active extensions, see if they
@@ -1400,9 +1415,12 @@ rops_periodic_checks_ws(struct lws_context *context, int tsi, time_t now)
 		lws_vhost_lock(vh);
 
 		for (n = 0; n < vh->count_protocols; n++) {
-			struct lws *wsi = vh->same_vh_protocol_list[n];
 
-			while (wsi) {
+			lws_start_foreach_dll_safe(struct lws_dll_lws *, d, d1,
+					  vh->same_vh_protocol_heads[n].next) {
+				struct lws *wsi = lws_container_of(d,
+						struct lws, same_vh_protocol);
+
 				if (lwsi_role_ws(wsi) &&
 				    !wsi->socket_is_permanently_unusable &&
 				    !wsi->ws->send_check_ping &&
@@ -1411,18 +1429,16 @@ rops_periodic_checks_ws(struct lws_context *context, int tsi, time_t now)
 					wsi->ws->time_next_ping_check) >
 				       context->ws_ping_pong_interval) {
 
-					lwsl_info("req pp on wsi %p\n",
-						  wsi);
+					lwsl_info("req pp on wsi %p\n", wsi);
 					wsi->ws->send_check_ping = 1;
 					lws_set_timeout(wsi,
 					PENDING_TIMEOUT_WS_PONG_CHECK_SEND_PING,
 						context->timeout_secs);
 					lws_callback_on_writable(wsi);
-					wsi->ws->time_next_ping_check =
-						now;
+					wsi->ws->time_next_ping_check = now;
 				}
-				wsi = wsi->same_vh_protocol_next;
-			}
+
+			} lws_end_foreach_dll_safe(d, d1);
 		}
 
 		lws_vhost_unlock(vh);
@@ -1465,6 +1481,9 @@ rops_service_flag_pending_ws(struct lws_context *context, int tsi)
 static int
 rops_close_via_role_protocol_ws(struct lws *wsi, enum lws_close_status reason)
 {
+	if (!wsi->ws)
+		return 0;
+
 	if (!wsi->ws->close_in_ping_buffer_len && /* already a reason */
 	     (reason == LWS_CLOSE_STATUS_NOSTATUS ||
 	      reason == LWS_CLOSE_STATUS_NOSTATUS_CONTEXT_DESTROY))
@@ -1493,7 +1512,11 @@ rops_close_via_role_protocol_ws(struct lws *wsi, enum lws_close_status reason)
 static int
 rops_close_role_ws(struct lws_context_per_thread *pt, struct lws *wsi)
 {
+	if (!wsi->ws)
+		return 0;
+
 #if !defined(LWS_WITHOUT_EXTENSIONS)
+
 	if (wsi->ws->rx_draining_ext) {
 		struct lws **w = &pt->ws.rx_draining_ext_list;
 
@@ -1511,7 +1534,7 @@ rops_close_role_ws(struct lws_context_per_thread *pt, struct lws *wsi)
 
 	if (wsi->ws->tx_draining_ext) {
 		struct lws **w = &pt->ws.tx_draining_ext_list;
-		lwsl_notice("%s: CLEARING tx_draining_ext\n", __func__);
+		lwsl_ext("%s: CLEARING tx_draining_ext\n", __func__);
 		wsi->ws->tx_draining_ext = 0;
 		/* remove us from context draining ext list */
 		while (*w) {
@@ -1525,10 +1548,6 @@ rops_close_role_ws(struct lws_context_per_thread *pt, struct lws *wsi)
 	}
 #endif
 	lws_free_set_NULL(wsi->ws->rx_ubuf);
-
-	if (wsi->trunc_alloc)
-		/* not going to be completed... nuke it */
-		lws_free_set_NULL(wsi->trunc_alloc);
 
 	wsi->ws->ping_payload_len = 0;
 	wsi->ws->ping_pending_flag = 0;
@@ -1562,7 +1581,7 @@ rops_write_role_protocol_ws(struct lws *wsi, unsigned char *buf, size_t len,
 		/* remove us from the list */
 		struct lws **w = &pt->ws.tx_draining_ext_list;
 
-		lwsl_notice("%s: CLEARING tx_draining_ext\n", __func__);
+		lwsl_ext("%s: CLEARING tx_draining_ext\n", __func__);
 		wsi->ws->tx_draining_ext = 0;
 		/* remove us from context draining ext list */
 		while (*w) {
@@ -1587,8 +1606,9 @@ rops_write_role_protocol_ws(struct lws *wsi, unsigned char *buf, size_t len,
 		if (!(wpt & LWS_WRITE_NO_FIN) && len)
 			*wp &= ~LWS_WRITE_NO_FIN;
 
-		lwsl_notice("FORCED draining wp to 0x%02X (stashed 0x%02X, incoming 0x%02X)\n", *wp,
-				wsi->ws->tx_draining_stashed_wp, wpt);
+		lwsl_ext("FORCED draining wp to 0x%02X "
+			 "(stashed 0x%02X, incoming 0x%02X)\n", *wp,
+			 wsi->ws->tx_draining_stashed_wp, wpt);
 		// assert(0);
 	}
 #endif
@@ -1640,13 +1660,16 @@ rops_write_role_protocol_ws(struct lws *wsi, unsigned char *buf, size_t len,
 		n = lws_ext_cb_active(wsi, LWS_EXT_CB_PAYLOAD_TX, &ebuf, *wp);
 		if (n < 0)
 			return -1;
-		// lwsl_notice("ext processed %d plaintext into %d compressed (wp 0x%x)\n", m, (int)ebuf.len, *wp);
+		// lwsl_notice("ext processed %d plaintext into %d compressed"
+		//	       " (wp 0x%x)\n", m, (int)ebuf.len, *wp);
 
 		if (n && ebuf.len) {
-			lwsl_notice("write drain len %d (wp 0x%x) SETTING tx_draining_ext\n", (int)ebuf.len, *wp);
+			lwsl_ext("write drain len %d (wp 0x%x) SETTING "
+				 "tx_draining_ext\n", (int)ebuf.len, *wp);
 			/* extension requires further draining */
 			wsi->ws->tx_draining_ext = 1;
-			wsi->ws->tx_draining_ext_list = pt->ws.tx_draining_ext_list;
+			wsi->ws->tx_draining_ext_list =
+					pt->ws.tx_draining_ext_list;
 			pt->ws.tx_draining_ext_list = wsi;
 			/* we must come back to do more */
 			lws_callback_on_writable(wsi);
@@ -1683,7 +1706,8 @@ rops_write_role_protocol_ws(struct lws *wsi, unsigned char *buf, size_t len,
 		 */
 		if (len && !ebuf.len) {
 			if (!wsi->ws->stashed_write_pending)
-				wsi->ws->stashed_write_type = (char)(*wp) & 0x3f;
+				wsi->ws->stashed_write_type =
+						(char)(*wp) & 0x3f;
 			wsi->ws->stashed_write_pending = 1;
 			return (int)len;
 		}
@@ -1805,7 +1829,7 @@ do_more_inside_frame:
 
 		assert(encap != wsi);
 		return encap->role_ops->write_role_protocol(wsi, buf - pre,
-							len + pre, wp);
+							    len + pre, wp);
 	}
 
 	switch ((*wp) & 0x1f) {
@@ -1985,9 +2009,17 @@ struct lws_role_ops role_ops_ws = {
 	/* destroy_role */		rops_destroy_role_ws,
 	/* adoption_bind */		NULL,
 	/* client_bind */		NULL,
+	/* adoption_cb clnt, srv */	{ LWS_CALLBACK_SERVER_NEW_CLIENT_INSTANTIATED,
+					  LWS_CALLBACK_SERVER_NEW_CLIENT_INSTANTIATED },
+	/* rx_cb clnt, srv */		{ LWS_CALLBACK_CLIENT_RECEIVE,
+					  LWS_CALLBACK_RECEIVE },
 	/* writeable cb clnt, srv */	{ LWS_CALLBACK_CLIENT_WRITEABLE,
 					  LWS_CALLBACK_SERVER_WRITEABLE },
 	/* close cb clnt, srv */	{ LWS_CALLBACK_CLIENT_CLOSED,
 					  LWS_CALLBACK_CLOSED },
+	/* protocol_bind cb c, srv */	{ LWS_CALLBACK_WS_CLIENT_BIND_PROTOCOL,
+					  LWS_CALLBACK_WS_SERVER_BIND_PROTOCOL },
+	/* protocol_unbind cb c, srv */	{ LWS_CALLBACK_WS_CLIENT_DROP_PROTOCOL,
+					  LWS_CALLBACK_WS_SERVER_DROP_PROTOCOL },
 	/* file handles */		0
 };

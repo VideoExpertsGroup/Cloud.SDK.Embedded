@@ -82,13 +82,15 @@ lws_extension_callback_pm_deflate(struct lws_context *context,
 		oa = in;
 		if (!oa->option_name)
 			break;
-		lwsl_ext("%s: named option set: %s\n", __func__, oa->option_name);
-		for (n = 0; n < (int)ARRAY_SIZE(lws_ext_pm_deflate_options); n++)
+		lwsl_ext("%s: named option set: %s\n", __func__,
+			 oa->option_name);
+		for (n = 0; n < (int)LWS_ARRAY_SIZE(lws_ext_pm_deflate_options);
+		     n++)
 			if (!strcmp(lws_ext_pm_deflate_options[n].name,
 				    oa->option_name))
 				break;
 
-		if (n == (int)ARRAY_SIZE(lws_ext_pm_deflate_options))
+		if (n == (int)LWS_ARRAY_SIZE(lws_ext_pm_deflate_options))
 			break;
 		oa->option_index = n;
 
@@ -177,7 +179,7 @@ lws_extension_callback_pm_deflate(struct lws_context *context,
 	case LWS_EXT_CB_PAYLOAD_RX:
 		lwsl_ext(" %s: LWS_EXT_CB_PAYLOAD_RX: in %d, existing in %d\n",
 			 __func__, ebuf->len, priv->rx.avail_in);
-		if (!(wsi->ws->rsv_first_msg & 0x40))
+		if (!(wsi->ws->rsv_first_msg & 0x40) || (wsi->ws->opcode & 8))
 			return 0;
 
 		// lwsl_hexdump_debug(ebuf->token, ebuf->len);
@@ -204,8 +206,7 @@ lws_extension_callback_pm_deflate(struct lws_context *context,
 		 * rx buffer by the caller, so this assumption is safe while
 		 * we block new rx while draining the existing rx
 		 */
-		if (!priv->rx.avail_in && ebuf->token &&
-		    ebuf->len) {
+		if (!priv->rx.avail_in && ebuf->token && ebuf->len) {
 			priv->rx.next_in = (unsigned char *)ebuf->token;
 			priv->rx.avail_in = ebuf->len;
 		}
@@ -302,8 +303,7 @@ lws_extension_callback_pm_deflate(struct lws_context *context,
 			priv->rx_held_valid = 1;
 		}
 
-		ebuf->len = lws_ptr_diff(priv->rx.next_out,
-						  ebuf->token);
+		ebuf->len = lws_ptr_diff(priv->rx.next_out, ebuf->token);
 		priv->count_rx_between_fin += ebuf->len;
 
 		lwsl_ext("  %s: RX leaving with new effbuff len %d, "
@@ -331,7 +331,7 @@ lws_extension_callback_pm_deflate(struct lws_context *context,
 			n = deflateInit2(&priv->tx, priv->args[PMD_COMP_LEVEL],
 					 Z_DEFLATED,
 					 -priv->args[PMD_SERVER_MAX_WINDOW_BITS +
-						     (wsi->vhost->listen_port <= 0)],
+						(wsi->vhost->listen_port <= 0)],
 					 priv->args[PMD_MEM_LEVEL],
 					 Z_DEFAULT_STRATEGY);
 			if (n != Z_OK) {
@@ -369,28 +369,36 @@ lws_extension_callback_pm_deflate(struct lws_context *context,
 		ebuf->token = (char *)priv->tx.next_out;
 		priv->tx.avail_out = 1 << priv->args[PMD_TX_BUF_PWR2];
 
-		n = deflate(&priv->tx, Z_SYNC_FLUSH);
-		if (n == Z_STREAM_ERROR) {
-			lwsl_ext("%s: Z_STREAM_ERROR\n", __func__);
-			return -1;
+		if (priv->tx.avail_in) {
+			n = deflate(&priv->tx, Z_SYNC_FLUSH);
+			if (n == Z_STREAM_ERROR) {
+				lwsl_ext("%s: Z_STREAM_ERROR\n", __func__);
+				return -1;
+			}
 		}
 
 		if (priv->tx_held_valid) {
 			priv->tx_held_valid = 0;
-			if ((int)priv->tx.avail_out == 1 << priv->args[PMD_TX_BUF_PWR2])
+			if ((int)priv->tx.avail_out ==
+					1 << priv->args[PMD_TX_BUF_PWR2])
 				/*
-				 * we can get a situation he took something in
+				 * We can get a situation he took something in
 				 * but did not generate anything out, at the end
 				 * of a message (eg, next thing he sends is 80
-				 * 00, a zero length FIN, like Authobahn can
+				 * 00, a zero length FIN, like Autobahn can
 				 * send).
+				 *
 				 * If we have come back as a FIN, we must not
 				 * place the pending trailer 00 00 FF FF, just
 				 * the 1 byte of live data
 				 */
+
 				*(--ebuf->token) = priv->tx_held[0];
 			else {
-				/* he generated data, prepend whole pending */
+				/*
+				 * he generated some data on his own...
+				 * prepend the whole pending
+				 */
 				ebuf->token -= 5;
 				for (n = 0; n < 5; n++)
 					ebuf->token[n] = priv->tx_held[n];
@@ -398,8 +406,7 @@ lws_extension_callback_pm_deflate(struct lws_context *context,
 			}
 		}
 		priv->compressed_out = 1;
-		ebuf->len = lws_ptr_diff(priv->tx.next_out,
-						  ebuf->token);
+		ebuf->len = lws_ptr_diff(priv->tx.next_out, ebuf->token);
 
 		/*
 		 * we must announce in our returncode now if there is more

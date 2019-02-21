@@ -1,7 +1,7 @@
 /*
  * libwebsockets-test-server - libwebsockets test implementation
  *
- * Copyright (C) 2010-2017 Andy Green <andy@warmcat.com>
+ * Copyright (C) 2010-2018 Andy Green <andy@warmcat.com>
  *
  * This file is made available under the Creative Commons CC0 1.0
  * Universal Public Domain Dedication.
@@ -26,7 +26,7 @@
 #if !defined (LWS_PLUGIN_STATIC)
 #define LWS_DLL
 #define LWS_INTERNAL
-#include "../lib/libwebsockets.h"
+#include <libwebsockets.h>
 #endif
 
 #include <string.h>
@@ -196,10 +196,10 @@ callback_lws_mirror(struct lws *wsi, enum lws_callback_reasons reason,
 			(struct per_vhost_data__lws_mirror *)
 			lws_protocol_vh_priv_get(lws_get_vhost(wsi),
 						 lws_get_protocol(wsi));
+	char name[300], update_worst, sent_something, *pn = name;
 	struct mirror_instance *mi = NULL;
 	const struct a_message *msg;
 	struct a_message amsg;
-	char name[300], update_worst, sent_something, *pn = name;
 	uint32_t oldest_tail;
 	int n, count_mi = 0;
 
@@ -212,13 +212,13 @@ callback_lws_mirror(struct lws *wsi, enum lws_callback_reasons reason,
 		 * "?mirror=xxx", will be "xxx"
 		 */
 		name[0] = '\0';
-		if (lws_get_urlarg_by_name(wsi, "mirror", name,
+		if (!lws_get_urlarg_by_name(wsi, "mirror", name,
 					   sizeof(name) - 1))
 			lwsl_debug("get urlarg failed\n");
 		if (strchr(name, '='))
 			pn = strchr(name, '=') + 1;
 
-		lwsl_notice("%s: mirror name '%s'\n", __func__, pn);
+		//lwsl_notice("%s: mirror name '%s'\n", __func__, pn);
 
 		/* is there already a mirror instance of this name? */
 
@@ -229,7 +229,6 @@ callback_lws_mirror(struct lws *wsi, enum lws_callback_reasons reason,
 			count_mi++;
 			if (!strcmp(pn, mi1->name)) {
 				/* yes... we will join it */
-				lwsl_notice("Joining existing mi %p '%s'\n", mi1, pn);
 				mi = mi1;
 				break;
 			}
@@ -239,7 +238,7 @@ callback_lws_mirror(struct lws *wsi, enum lws_callback_reasons reason,
 
 			/* no existing mirror instance for name */
 			if (count_mi == MAX_MIRROR_INSTANCES) {
-				lws_pthread_mutex_unlock(&v->lock); /* } vhost lock */
+				lws_pthread_mutex_unlock(&v->lock); /* } vh lock */
 				return -1;
 			}
 
@@ -436,7 +435,8 @@ bail2:
 		}
 
 		if (pss->mi->rx_enabled &&
-		    lws_ring_get_count_free_elements(pss->mi->ring) < RXFLOW_MIN)
+		    lws_ring_get_count_free_elements(pss->mi->ring) <
+								    RXFLOW_MIN)
 			__mirror_rxflow_instance(pss->mi, 0);
 
 req_writable:
@@ -482,7 +482,7 @@ init_protocol_lws_mirror(struct lws_context *context,
 	}
 
 	c->protocols = protocols;
-	c->count_protocols = ARRAY_SIZE(protocols);
+	c->count_protocols = LWS_ARRAY_SIZE(protocols);
 	c->extensions = NULL;
 	c->count_extensions = 0;
 

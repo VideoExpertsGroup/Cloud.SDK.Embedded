@@ -9,6 +9,10 @@
  *
  * This version is LGPL2.1+SLE like the rest of libwebsockets and is
  * Copyright (c)2006 - 2013 Andy Green <andy@warmcat.com>
+ *
+ *
+ * You're much better advised to use systemd to daemonize stuff without needing
+ * this kind of support in the app itself.
  */
 
 #include <stdlib.h>
@@ -24,10 +28,10 @@
 
 #include "core/private.h"
 
-int pid_daemon;
+pid_t pid_daemon;
 static char *lock_path;
 
-int get_daemonize_pid()
+pid_t get_daemonize_pid()
 {
 	return pid_daemon;
 }
@@ -35,7 +39,7 @@ int get_daemonize_pid()
 static void
 child_handler(int signum)
 {
-	int fd, len, sent;
+	int len, sent, fd;
 	char sz[20];
 
 	switch (signum) {
@@ -46,25 +50,27 @@ child_handler(int signum)
 
 	case SIGUSR1: /* positive confirmation we daemonized well */
 
-		if (lock_path) {
-			/* Create the lock file as the current user */
+		if (!lock_path)
+			exit(0);
 
-			fd = open(lock_path, O_TRUNC | O_RDWR | O_CREAT, 0640);
-			if (fd < 0) {
-				fprintf(stderr,
-				   "unable to create lock file %s, code=%d (%s)\n",
-					lock_path, errno, strerror(errno));
-				exit(0);
-			}
-			len = sprintf(sz, "%u", pid_daemon);
-			sent = write(fd, sz, len);
-			if (sent != len)
-				fprintf(stderr,
-				  "unable to write pid to lock file %s, code=%d (%s)\n",
-						     lock_path, errno, strerror(errno));
+		/* Create the lock file as the current user */
 
-			close(fd);
+		fd = lws_open(lock_path, O_TRUNC | O_RDWR | O_CREAT, 0640);
+		if (fd < 0) {
+			fprintf(stderr,
+			   "unable to create lock file %s, code=%d (%s)\n",
+				lock_path, errno, strerror(errno));
+			exit(0);
 		}
+		len = sprintf(sz, "%u", pid_daemon);
+		sent = write(fd, sz, len);
+		if (sent != len)
+			fprintf(stderr,
+			  "unable to write pid to lock file %s, code=%d (%s)\n",
+					     lock_path, errno, strerror(errno));
+
+		close(fd);
+
 		exit(0);
 		//!!(sent == len));
 
@@ -98,29 +104,33 @@ lws_daemonize(const char *_lock_path)
 {
 	struct sigaction act;
 	pid_t sid, parent;
-	int n, fd, ret;
-	char buf[10];
 
 	/* already a daemon */
 //	if (getppid() == 1)
 //		return 1;
 
 	if (_lock_path) {
-		fd = open(_lock_path, O_RDONLY);
+		int n;
+
+		int fd = lws_open(_lock_path, O_RDONLY);
 		if (fd >= 0) {
+			char buf[10];
+
 			n = read(fd, buf, sizeof(buf));
 			close(fd);
 			if (n) {
+				int ret;
 				n = atoi(buf);
 				ret = kill(n, 0);
 				if (ret >= 0) {
 					fprintf(stderr,
-					     "Daemon already running from pid %d\n", n);
+					     "Daemon already running pid %d\n",
+					     n);
 					exit(1);
 				}
 				fprintf(stderr,
-				    "Removing stale lock file %s from dead pid %d\n",
-									 _lock_path, n);
+				    "Removing stale lock %s from dead pid %d\n",
+							_lock_path, n);
 				unlink(lock_path);
 			}
 		}
@@ -141,7 +151,7 @@ lws_daemonize(const char *_lock_path)
 
 	/* Fork off the parent process */
 	pid_daemon = fork();
-	if (pid_daemon < 0) {
+	if ((int)pid_daemon < 0) {
 		fprintf(stderr, "unable to fork daemon, code=%d (%s)",
 		    errno, strerror(errno));
 		exit(9);

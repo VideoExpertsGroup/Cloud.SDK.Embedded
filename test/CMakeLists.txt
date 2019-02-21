@@ -38,7 +38,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 #set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 
-set (CMAKE_CXX_FLAGS "-std=c++11 -Os")
+#set (CMAKE_CXX_FLAGS "-std=c++11 -Os")
+set (CMAKE_CXX_FLAGS "-Os")
 
 find_library(
               jansson
@@ -78,33 +79,39 @@ include_directories(${JANSSON_BUILD_DIR}/include
 # add the executable
 add_executable(vxg_cloudstreamer test_cloudstreamer.cpp)
 
-if (FLAG_USE_UBUNTU)
-    message(${FLAG_USE_UBUNTU})
-    target_link_libraries( # Specifies the target
-                       vxg_cloudstreamer
-                       # Links libraries to the target library.
-    pthread
-                       ${jansson}
-                       ${libwebsockets}
-                       ${cloudsdk}
-    cap
-)
-else(USE_FFSTREAMER_LIB)
+if (USE_FFSTREAMER_LIB)
 
-    message(XXXXXXXXXXXXXXXXX)
     message(${ffstreamer})
 
     target_compile_definitions(vxg_cloudstreamer PUBLIC USE_FFSTREAMER_LIB=1)
-
+    if (FLAG_USE_UBUNTU)
     target_link_libraries( # Specifies the target
                        vxg_cloudstreamer
                        # Links libraries to the target library.
-    pthread
+		       pthread
                        ${cloudsdk}
                        ${jansson}
                        ${libwebsockets}
                        ${ffstreamer}        
-)
+                       ${libcurl}
+		       ${xml2}
+		       z
+		       lzma
+		       cap	
+			)
+    else()
+    target_link_libraries( # Specifies the target
+                       vxg_cloudstreamer
+                       # Links libraries to the target library.
+		       pthread
+                       ${cloudsdk}
+                       ${jansson}
+                       ${libwebsockets}
+                       ${ffstreamer}        
+                       ${libcurl}        
+		       ${xml2}
+			)
+    endif()		
 else()
     target_link_libraries( # Specifies the target
                        vxg_cloudstreamer

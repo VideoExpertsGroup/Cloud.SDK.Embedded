@@ -108,12 +108,16 @@ static void signal_handler(int sig )
 
 class CStreamerCallback : public ICloudStreamerCallback, public CUnk
 {
-	const char *TAG = "CStreamerCallback";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+//	const char *TAG = "CStreamerCallback";
+//	const int LOG_LEVEL = 2; //Log.VERBOSE;
 	MLog Log;
 
 public:
-	CStreamerCallback() : Log(TAG, LOG_LEVEL) {};
+	CStreamerCallback() : Log("CStreamerCallback", 2)
+	{
+		pid = -1;
+	};
+
 	virtual ~CStreamerCallback() {};
 
 	void onStarted(std::string url_push) //Cloud gets ready for data, url_push == rtmp://...
@@ -140,9 +144,20 @@ public:
 		Log.v("=onCommand cmd=%s", cmd.c_str());
 	}
 
+	int onRawMsg(std::string& data)
+	{
+		return 0;
+	}
+	void onUploadUrl(void* inst, std::string url, int refid)
+	{
+	}
+	void onCamGetLog(std::string url)
+	{
+	}
+
 private:
 
-	int pid = -1;
+	int pid;
 	int streamPushStart(std::string url_push) {
 
 #ifdef USE_FFSTREAMER_LIB
@@ -188,7 +203,7 @@ private:
 			execv(szProc, &args[0]);
 			fprintf(stderr, "szProc=%s\n", szProc);
 #else
-			execv("/usr/bin/ffmpeg", &args[0]);
+			execv("/usr/local/bin/ffmpeg", &args[0]);
 #endif
 		}
 		else

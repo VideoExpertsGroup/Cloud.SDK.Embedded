@@ -16,7 +16,7 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <errno.h>
 
@@ -49,7 +49,6 @@ file_upload_cb(void *data, const char *name, const char *filename,
 	       char *buf, int len, enum lws_spa_fileupload_states state)
 {
 	struct pss *pss = (struct pss *)data;
-	int n;
 
 	switch (state) {
 	case LWS_UFS_OPEN:
@@ -58,7 +57,7 @@ file_upload_cb(void *data, const char *name, const char *filename,
 		/* remove any scary things like .. */
 		lws_filename_purify_inplace(pss->filename);
 		/* open a file of that name for write in the cwd */
-		pss->fd = open(pss->filename, O_CREAT | O_TRUNC | O_RDWR, 0600);
+		pss->fd = lws_open(pss->filename, O_CREAT | O_TRUNC | O_RDWR, 0600);
 		if (pss->fd == LWS_INVALID_FILE) {
 			lwsl_notice("Failed to open output file %s\n",
 				    pss->filename);
@@ -68,6 +67,8 @@ file_upload_cb(void *data, const char *name, const char *filename,
 	case LWS_UFS_FINAL_CONTENT:
 	case LWS_UFS_CONTENT:
 		if (len) {
+			int n;
+
 			pss->file_length += len;
 
 			n = write(pss->fd, buf, len);
@@ -96,8 +97,8 @@ static int
 callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 	      void *in, size_t len)
 {
-	uint8_t buf[LWS_PRE + 256], *start = &buf[LWS_PRE], *p = start,
-		*end = &buf[sizeof(buf) - 1];
+	uint8_t buf[LWS_PRE + LWS_RECOMMENDED_MIN_HEADER_SPACE], *start = &buf[LWS_PRE],
+		*p = start, *end = &buf[sizeof(buf) - 1];
 	struct pss *pss = (struct pss *)user;
 	int n;
 
@@ -125,7 +126,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 
 		if (!pss->spa) {
 			pss->spa = lws_spa_create(wsi, param_names,
-					ARRAY_SIZE(param_names), 1024,
+					LWS_ARRAY_SIZE(param_names), 1024,
 					file_upload_cb, pss);
 			if (!pss->spa)
 				return -1;
@@ -145,7 +146,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 
 		/* we just dump the decoded things to the log */
 
-		for (n = 0; n < (int)ARRAY_SIZE(param_names); n++) {
+		for (n = 0; n < (int)LWS_ARRAY_SIZE(param_names); n++) {
 			if (!lws_spa_get_string(pss->spa, n))
 				lwsl_user("%s: undefined\n", param_names[n]);
 			else
@@ -239,6 +240,8 @@ int main(int argc, const char **argv)
 	info.port = 7681;
 	info.protocols = protocols;
 	info.mounts = &mount;
+	info.options =
+		LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
 
 	context = lws_create_context(&info);
 	if (!context) {

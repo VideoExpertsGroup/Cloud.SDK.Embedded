@@ -261,7 +261,7 @@ lws_tls_server_new_nonblocking(struct lws *wsi, lws_sockfd_type accept_fd)
 	if (wsi->tls.ssl == NULL) {
 		lwsl_err("SSL_new failed: errno %d\n", errno);
 
-		lws_ssl_elaborate_error();
+		lws_tls_err_describe();
 		return 1;
 	}
 
@@ -294,18 +294,20 @@ lws_tls_server_accept(struct lws *wsi)
 	if (n == 1) {
 
 		if (strstr(wsi->vhost->name, ".invalid")) {
-			lwsl_notice("%s: vhost has .invalid, rejecting accept\n", __func__);
+			lwsl_notice("%s: vhost has .invalid, "
+				    "rejecting accept\n", __func__);
 
 			return LWS_SSL_CAPABLE_ERROR;
 		}
 
-		n = lws_tls_peer_cert_info(wsi, LWS_TLS_CERT_INFO_COMMON_NAME, &ir,
-					   sizeof(ir.ns.name));
+		n = lws_tls_peer_cert_info(wsi, LWS_TLS_CERT_INFO_COMMON_NAME,
+					   &ir, sizeof(ir.ns.name));
 		if (!n)
 			lwsl_notice("%s: client cert CN '%s'\n",
 				    __func__, ir.ns.name);
 		else
-			lwsl_info("%s: couldn't get client cert CN\n", __func__);
+			lwsl_info("%s: couldn't get client cert CN\n",
+				  __func__);
 		return LWS_SSL_CAPABLE_DONE;
 	}
 
@@ -317,12 +319,18 @@ lws_tls_server_accept(struct lws *wsi)
 	if (m == SSL_ERROR_SYSCALL && errno == 11)
 		return LWS_SSL_CAPABLE_MORE_SERVICE_READ;
 
+#if defined(WIN32)
+	if (m == SSL_ERROR_SYSCALL && errno == 0)
+		return LWS_SSL_CAPABLE_MORE_SERVICE_READ;
+#endif
+
 	if (m == SSL_ERROR_SYSCALL || m == SSL_ERROR_SSL)
 		return LWS_SSL_CAPABLE_ERROR;
 
 	if (m == SSL_ERROR_WANT_READ || SSL_want_read(wsi->tls.ssl)) {
 		if (lws_change_pollfd(wsi, 0, LWS_POLLIN)) {
-			lwsl_info("%s: WANT_READ change_pollfd failed\n", __func__);
+			lwsl_info("%s: WANT_READ change_pollfd failed\n",
+				  __func__);
 			return LWS_SSL_CAPABLE_ERROR;
 		}
 
@@ -333,7 +341,8 @@ lws_tls_server_accept(struct lws *wsi)
 		lwsl_debug("%s: WANT_WRITE\n", __func__);
 
 		if (lws_change_pollfd(wsi, 0, LWS_POLLOUT)) {
-			lwsl_info("%s: WANT_WRITE change_pollfd failed\n", __func__);
+			lwsl_info("%s: WANT_WRITE change_pollfd failed\n",
+				  __func__);
 			return LWS_SSL_CAPABLE_ERROR;
 		}
 		return LWS_SSL_CAPABLE_MORE_SERVICE_WRITE;
@@ -449,7 +458,7 @@ lws_tls_acme_sni_cert_create(struct lws_vhost *vhost, const char *san_a,
 	int buflen = 0x560;
 	uint8_t *buf = lws_malloc(buflen, "tmp cert buf"), *p = buf, *pkey_asn1;
 	struct lws_genrsa_ctx ctx;
-	struct lws_genrsa_elements el;
+	struct lws_gencrypto_keyelem el;
 	uint8_t digest[32];
 	struct lws_genhash_ctx hash_ctx;
 	int pkey_asn1_len = 3 * 1024;
@@ -460,7 +469,7 @@ lws_tls_acme_sni_cert_create(struct lws_vhost *vhost, const char *san_a,
 
 	n = lws_genrsa_new_keypair(vhost->context, &ctx, &el, keybits);
 	if (n < 0) {
-		lws_jwk_destroy_genrsa_elements(&el);
+		lws_genrsa_destroy_elements(&el);
 		goto bail1;
 	}
 
@@ -494,8 +503,8 @@ lws_tls_acme_sni_cert_create(struct lws_vhost *vhost, const char *san_a,
 	/* we need to drop 1 + (keybits / 8) bytes of n in here, 00 + key */
 
 	*p++ = 0x00;
-	memcpy(p, el.e[JWK_KEY_N].buf, el.e[JWK_KEY_N].len);
-	p += el.e[JWK_KEY_N].len;
+	memcpy(p, el.e[LWS_GENCRYPTO_RSA_KEYEL_N].buf, el.e[LWS_GENCRYPTO_RSA_KEYEL_N].len);
+	p += el.e[LWS_GENCRYPTO_RSA_KEYEL_N].len;
 
 	memcpy(p, ss_cert_san_leadin, sizeof(ss_cert_san_leadin));
 	p += sizeof(ss_cert_san_leadin);
@@ -526,7 +535,7 @@ lws_tls_acme_sni_cert_create(struct lws_vhost *vhost, const char *san_a,
 
 	/* sign the hash */
 
-	n = lws_genrsa_public_sign(&ctx, digest, LWS_GENHASH_TYPE_SHA256, p,
+	n = lws_genrsa_hash_sign(&ctx, digest, LWS_GENHASH_TYPE_SHA256, p,
 				 buflen - lws_ptr_diff(p, buf));
 	if (n < 0)
 		goto bail2;
@@ -554,7 +563,8 @@ lws_tls_acme_sni_cert_create(struct lws_vhost *vhost, const char *san_a,
 		//lwsl_hexdump_level(LLL_DEBUG, pkey_asn1, n);
 
 		/* and to use our generated private key */
-		n = SSL_CTX_use_PrivateKey_ASN1(0, vhost->tls.ssl_ctx, pkey_asn1, m);
+		n = SSL_CTX_use_PrivateKey_ASN1(0, vhost->tls.ssl_ctx,
+						pkey_asn1, m);
 		lws_free(pkey_asn1);
 		if (n != 1) {
 			lwsl_err("%s: SSL_CTX_use_PrivateKey_ASN1 failed\n",
@@ -563,7 +573,7 @@ lws_tls_acme_sni_cert_create(struct lws_vhost *vhost, const char *san_a,
 	}
 
 	lws_genrsa_destroy(&ctx);
-	lws_jwk_destroy_genrsa_elements(&el);
+	lws_genrsa_destroy_elements(&el);
 
 	lws_free(buf);
 
@@ -571,7 +581,7 @@ lws_tls_acme_sni_cert_create(struct lws_vhost *vhost, const char *san_a,
 
 bail2:
 	lws_genrsa_destroy(&ctx);
-	lws_jwk_destroy_genrsa_elements(&el);
+	lws_genrsa_destroy_elements(&el);
 bail1:
 	lws_free(buf);
 
@@ -583,7 +593,7 @@ lws_tls_acme_sni_cert_destroy(struct lws_vhost *vhost)
 {
 }
 
-#if defined(LWS_WITH_JWS)
+#if defined(LWS_WITH_JOSE)
 static int
 _rngf(void *context, unsigned char *buf, size_t len)
 {
@@ -631,7 +641,7 @@ lws_tls_acme_sni_csr_create(struct lws_context *context, const char *elements[],
 
 	/* subject must be formatted like "C=TW,O=warmcat,CN=myserver" */
 
-	for (n = 0; n < (int)ARRAY_SIZE(x5); n++) {
+	for (n = 0; n < (int)LWS_ARRAY_SIZE(x5); n++) {
 		if (p != subject)
 			*p++ = ',';
 		if (elements[n])

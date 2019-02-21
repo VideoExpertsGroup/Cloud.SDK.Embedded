@@ -27,19 +27,19 @@
 using namespace std;
 
 class CloudAPI : public CUnk {
-	const char *TAG = "CloudAPI";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+//	const char *TAG = "CloudAPI";
+//	const int LOG_LEVEL = 2; //Log.VERBOSE;
 	MLog Log;
 
-    std::string mProtocol = "http";
-	std::string mHost = "";
-	std::string mPrefixPath = "";
-    CloudToken mToken;
-	std::string mShareToken = "";
-    static const int readTimeout = 10000;
-    static const int connectTimeout = 2000;
+	std::string mProtocol;
+	std::string mHost;
+	std::string mPrefixPath;
+	CloudToken mToken;
+	std::string mShareToken;
+	static const int readTimeout = 10000;
+	static const int connectTimeout = 2000;
 
-	std::string mCMAddress = "";
+	std::string mCMAddress;
 
 	std::string makeURL(std::string endPoint) {
 		std::string url = mProtocol + "://" + mHost + mPrefixPath + endPoint;
@@ -48,10 +48,18 @@ class CloudAPI : public CUnk {
 
 public:
     CloudAPI() 
-		:Log(TAG, LOG_LEVEL) 
+		:Log("CloudAPI", 2) 
 	{
+
+
+		mProtocol = "http";
+		mHost = "";
+		mPrefixPath = "";
+		mShareToken = "";
+		mCMAddress = "";
+
 		Log.v("=>CloudAPI this=%p", this);
-    }
+	}
 	virtual ~CloudAPI() {
 		Log.v("<=CloudAPI this=%p", this);
 	}

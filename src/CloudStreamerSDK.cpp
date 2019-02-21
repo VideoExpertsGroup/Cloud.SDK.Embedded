@@ -5,13 +5,14 @@
 #include <jansson.h>
 
 CloudStreamerSDK::CloudStreamerSDK(ICloudStreamerCallback *callback)
-	:Log(TAG, LOG_LEVEL)
+	:Log("CloudStreamerSDK", 2)
 {
 	Log.v("=>CloudStreamerSDK");
 	mCallback = callback;
 
 	mCamid = -1;
 	m_RefConnected = 0;
+	snap_handler = NULL;
 }
 
 CloudStreamerSDK::~CloudStreamerSDK()
@@ -31,7 +32,7 @@ int CloudStreamerSDK::setSource(std::string &channel)
 	json_error_t err;
 	json_t *root = json_loads(out_channel, 0, &err);
 	Log.v("=setSource %s", out_channel);
-	delete out_channel;
+	delete[] out_channel;
 
 	mToken = json_string_value(json_object_get(root, "token"));
 	mCamid = json_integer_value(json_object_get(root, "camid"));
@@ -96,16 +97,22 @@ int CloudStreamerSDK::Stop()
 	return 0;
 }
 
+int CloudStreamerSDK::sendCamEvent(const CameraEvent &camEvent)
+{
+	return mCameraManager.send_cam_event(camEvent);
+}
+
+
 
 //=>streamer CM
 int CloudStreamerSDK::prepareCM()
 {
 	Log.v("=>prepareCM");
 
-	mCameraManager.Open(mCameraManagerConfig, this);
+	int ret = mCameraManager.Open(mCameraManagerConfig, this);
 
 	Log.v("<=prepareCM");
-	return 0;
+	return ret;
 }
 
 int CloudStreamerSDK::closeCM()
@@ -131,9 +138,13 @@ void CloudStreamerSDK::onClosed(int error, std::string reason)
 	if (error == -1) {
 		error = reason_str_to_int(reason);
 	}
-	Log.v("=onClosed %d:%s", error, reason.c_str());
+	Log.v("=onClosed %d:%s %x", error, reason.c_str(),mCallback);
 	if (mCallback)
 		mCallback->onError(error);
+//	if (mCallback)
+//		mCallback->onClosed(error);
+
+		
 }
 
 void CloudStreamerSDK::onUpdateConfig(CameraManagerConfig &config)
@@ -144,19 +155,19 @@ void CloudStreamerSDK::onUpdateConfig(CameraManagerConfig &config)
 
 void CloudStreamerSDK::onStreamStart()
 {
-	Log.v("=onStreamStart");
-
 	long cnt = InterlockedIncrement(&m_RefConnected);
 
-	if (mCallback && cnt == 1)
+	Log.v("=onStreamStart cnt=%d", cnt);
+
+	if (mCallback && cnt == 1) // Client will handle it becauase
 		mCallback->onStarted(mCameraManager.getStreamUrl());
 }
 
 void CloudStreamerSDK::onStreamStop()
 {
-	Log.v("=onStreamStop");
-
 	long cnt = InterlockedDecrement(&m_RefConnected);
+
+	Log.v("=onStreamStop cnt=%d", cnt);
 
 	if (mCallback && cnt == 0)
 		mCallback->onStopped();
@@ -172,4 +183,66 @@ void CloudStreamerSDK::onUpdatePreview()
 	Log.v("=onUpdatePreview");
 }
 
+int CloudStreamerSDK::onRawMessage(std::string& data)
+{
+	Log.e("=onRawMessage");
+
+	//long cnt = InterlockedIncrement(&m_RefConnected);
+
+	int ret = -1;
+
+	if (mCallback)// && cnt == 1)
+	{
+		ret = mCallback->onRawMsg(data);
+		Log.e("data = %s, ret=%d", data.c_str(), ret);
+	}
+	else
+	{
+		Log.e("=onRawMessage mCallback=%p", mCallback);// , cnt);
+	}
+
+	return ret;
+}
+
+void CloudStreamerSDK::onRecvUploadUrl(std::string url, int refid)
+{
+	Log.v("=onRecvUploadUrl");
+
+	if (mCallback)
+		mCallback->onUploadUrl(this, url, refid);
+}
+
 //<=ICameraManagerCallback
+
+void CloudStreamerSDK::SetUserParam(void* ptr)
+{
+	snap_handler = ptr;
+}
+
+void* CloudStreamerSDK::GetUserParam()
+{
+	return snap_handler;
+}
+
+int CloudStreamerSDK::ConfirmUpload(std::string url)
+{
+	return mCameraManager.confirm_direct_upload(url);
+}
+
+void CloudStreamerSDK::onGetLog(std::string url)
+{
+	Log.v("=onGetLog %s", url.c_str());
+	if (mCallback)
+		mCallback->onCamGetLog(url);
+}
+
+int CloudStreamerSDK::SetCamTimeZone(int tz)
+{
+	return mCameraManager.set_cam_tz(tz);
+}
+
+int CloudStreamerSDK::GetCamTimeZone()
+{
+	return mCameraManager.get_cam_tz();
+}
+

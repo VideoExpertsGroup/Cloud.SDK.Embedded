@@ -1,7 +1,7 @@
 /*
  * libwebsockets - OpenSSL-specific server functions
  *
- * Copyright (C) 2010-2017 Andy Green <andy@warmcat.com>
+ * Copyright (C) 2010-2018 Andy Green <andy@warmcat.com>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -21,8 +21,15 @@
 
 #include "core/private.h"
 
+/*
+ * Care: many openssl apis return 1 for success.  These are translated to the
+ * lws convention of 0 for success.
+ */
+
 extern int openssl_websocket_private_data_index,
 	   openssl_SSL_CTX_private_data_index;
+
+int lws_openssl_describe_cipher(struct lws *wsi);
 
 static int
 OpenSSL_verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx)
@@ -42,8 +49,8 @@ OpenSSL_verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx)
 	 */
 	wsi = SSL_get_ex_data(ssl, openssl_websocket_private_data_index);
 
-	n = lws_tls_openssl_cert_info(topcert, LWS_TLS_CERT_INFO_COMMON_NAME, &ir,
-				   sizeof(ir.ns.name));
+	n = lws_tls_openssl_cert_info(topcert, LWS_TLS_CERT_INFO_COMMON_NAME,
+				      &ir, sizeof(ir.ns.name));
 	if (!n)
 		lwsl_info("%s: client cert CN '%s'\n", __func__, ir.ns.name);
 	else
@@ -76,7 +83,8 @@ lws_tls_server_client_cert_verify_config(struct lws_vhost *vh)
 				       sizeof(void *));
 
 	/* absolutely require the client cert */
-	SSL_CTX_set_verify(vh->tls.ssl_ctx, verify_options, OpenSSL_verify_callback);
+	SSL_CTX_set_verify(vh->tls.ssl_ctx, verify_options,
+			   OpenSSL_verify_callback);
 
 	return 0;
 }
@@ -144,20 +152,20 @@ lws_tls_server_certs_load(struct lws_vhost *vhost, struct lws *wsi,
 			  const char *mem_cert, size_t len_mem_cert,
 			  const char *mem_privkey, size_t mem_privkey_len)
 {
-#if defined(LWS_HAVE_OPENSSL_ECDH_H)
+#if !defined(OPENSSL_NO_EC)
 	const char *ecdh_curve = "prime256v1";
+#if !defined(LWS_WITH_BORINGSSL) && defined(LWS_HAVE_SSL_EXTRA_CHAIN_CERTS)
+	STACK_OF(X509) *extra_certs = NULL;
+#endif
 	EC_KEY *ecdh, *EC_key = NULL;
 	EVP_PKEY *pkey;
 	X509 *x = NULL;
 	int ecdh_nid;
 	int KeyType;
-#if defined(LWS_HAVE_SSL_EXTRA_CHAIN_CERTS)
-	STACK_OF(X509) *extra_certs = NULL;
-#endif
 #endif
 	unsigned long error;
-	uint8_t *p;
 	lws_filepos_t flen;
+	uint8_t *p;
 
 	int n = lws_tls_generic_cert_checks(vhost, cert, private_key), m;
 
@@ -205,11 +213,12 @@ lws_tls_server_certs_load(struct lws_vhost *vhost, struct lws *wsi,
 			return 1;
 		}
 #ifndef USE_WOLFSSL
-		if (SSL_CTX_use_PrivateKey_ASN1(EVP_PKEY_RSA, vhost->tls.ssl_ctx,
-						p, (long)(long long)flen) != 1) {
+		if (SSL_CTX_use_PrivateKey_ASN1(EVP_PKEY_RSA,
+						vhost->tls.ssl_ctx, p,
+						(long)(long long)flen) != 1) {
 #else
-		if (wolfSSL_CTX_use_PrivateKey_buffer(vhost->tls.ssl_ctx,
-						p, flen, WOLFSSL_FILETYPE_ASN1) != 1) {
+		if (wolfSSL_CTX_use_PrivateKey_buffer(vhost->tls.ssl_ctx, p,
+					    flen, WOLFSSL_FILETYPE_ASN1) != 1) {
 #endif
 			lwsl_notice("unable to use memory privkey\n");
 
@@ -243,8 +252,8 @@ lws_tls_server_certs_load(struct lws_vhost *vhost, struct lws *wsi,
 		}
 	} else {
 		if (vhost->protocols[0].callback(wsi,
-		    LWS_CALLBACK_OPENSSL_CONTEXT_REQUIRES_PRIVATE_KEY,
-		    vhost->tls.ssl_ctx, NULL, 0)) {
+			      LWS_CALLBACK_OPENSSL_CONTEXT_REQUIRES_PRIVATE_KEY,
+						 vhost->tls.ssl_ctx, NULL, 0)) {
 			lwsl_err("ssl private key not set\n");
 
 			return 1;
@@ -259,7 +268,7 @@ check_key:
 		return 1;
 	}
 
-#if defined(LWS_HAVE_OPENSSL_ECDH_H)
+#if !defined(OPENSSL_NO_EC)
 	if (vhost->tls.ecdh_curve[0])
 		ecdh_curve = vhost->tls.ecdh_curve;
 
@@ -300,7 +309,7 @@ check_key:
 		goto post_ecdh;
 	}
 #else
-	return 1;
+	return 0;
 #endif
 	/* Get the public key from certificate */
 	pkey = X509_get_pubkey(x);
@@ -329,7 +338,7 @@ check_key:
 #else
 	lwsl_notice(" OpenSSL doesn't support ECDH\n");
 #endif
-#if defined(LWS_HAVE_OPENSSL_ECDH_H) && !defined(LWS_WITH_BORINGSSL)
+#if !defined(OPENSSL_NO_EC) && !defined(LWS_WITH_BORINGSSL)
 post_ecdh:
 #endif
 	vhost->tls.skipped_certs = 0;
@@ -361,10 +370,12 @@ lws_tls_server_vhost_backend_init(const struct lws_context_creation_info *info,
 		return 1;
 	}
 
-	SSL_CTX_set_ex_data(vhost->tls.ssl_ctx, openssl_SSL_CTX_private_data_index,
+	SSL_CTX_set_ex_data(vhost->tls.ssl_ctx,
+			    openssl_SSL_CTX_private_data_index,
 			    (char *)vhost->context);
 	/* Disable SSLv2 and SSLv3 */
-	SSL_CTX_set_options(vhost->tls.ssl_ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
+	SSL_CTX_set_options(vhost->tls.ssl_ctx, SSL_OP_NO_SSLv2 |
+						SSL_OP_NO_SSLv3);
 #ifdef SSL_OP_NO_COMPRESSION
 	SSL_CTX_set_options(vhost->tls.ssl_ctx, SSL_OP_NO_COMPRESSION);
 #endif
@@ -373,6 +384,12 @@ lws_tls_server_vhost_backend_init(const struct lws_context_creation_info *info,
 
 	if (info->ssl_cipher_list)
 		SSL_CTX_set_cipher_list(vhost->tls.ssl_ctx, info->ssl_cipher_list);
+
+#if defined(LWS_HAVE_SSL_CTX_set_ciphersuites)
+	if (info->tls1_3_plus_cipher_list)
+		SSL_CTX_set_ciphersuites(vhost->tls.ssl_ctx,
+					 info->tls1_3_plus_cipher_list);
+#endif
 
 #if !defined(OPENSSL_NO_TLSEXT)
 	SSL_CTX_set_tlsext_servername_callback(vhost->tls.ssl_ctx,
@@ -393,10 +410,12 @@ lws_tls_server_vhost_backend_init(const struct lws_context_creation_info *info,
 /* SSL_clear_options introduced in 0.9.8m */
 #if (OPENSSL_VERSION_NUMBER >= 0x009080df) && !defined(USE_WOLFSSL)
 	if (info->ssl_options_clear)
-		SSL_CTX_clear_options(vhost->tls.ssl_ctx, info->ssl_options_clear);
+		SSL_CTX_clear_options(vhost->tls.ssl_ctx,
+				      info->ssl_options_clear);
 #endif
 
-	lwsl_info(" SSL options 0x%lX\n", (unsigned long)SSL_CTX_get_options(vhost->tls.ssl_ctx));
+	lwsl_info(" SSL options 0x%lX\n",
+			(unsigned long)SSL_CTX_get_options(vhost->tls.ssl_ctx));
 	if (!vhost->tls.use_ssl || !info->ssl_cert_filepath)
 		return 0;
 
@@ -420,7 +439,7 @@ lws_tls_server_new_nonblocking(struct lws *wsi, lws_sockfd_type accept_fd)
 		lwsl_err("SSL_new failed: %d (errno %d)\n",
 			 lws_ssl_get_error(wsi, 0), errno);
 
-		lws_ssl_elaborate_error();
+		lws_tls_err_describe();
 		return 1;
 	}
 
@@ -475,10 +494,22 @@ lws_tls_server_accept(struct lws *wsi)
 		n = lws_tls_peer_cert_info(wsi, LWS_TLS_CERT_INFO_COMMON_NAME, &ir,
 					   sizeof(ir.ns.name));
 		if (!n)
-			lwsl_notice("%s: client cert CN '%s'\n",
-				    __func__, ir.ns.name);
+			lwsl_notice("%s: client cert CN '%s'\n", __func__,
+				    ir.ns.name);
 		else
-			lwsl_info("%s: couldn't get client cert CN\n", __func__);
+			lwsl_info("%s: no client cert CN\n", __func__);
+
+		lws_openssl_describe_cipher(wsi);
+
+		if (SSL_pending(wsi->tls.ssl) &&
+		    lws_dll_is_null(&wsi->tls.pending_tls_list)) {
+			struct lws_context_per_thread *pt =
+					&wsi->context->pt[(int)wsi->tsi];
+
+			lws_dll_lws_add_front(&wsi->tls.pending_tls_list,
+					      &pt->tls.pending_tls_head);
+		}
+
 		return LWS_SSL_CAPABLE_DONE;
 	}
 
@@ -745,7 +776,8 @@ lws_tls_acme_sni_csr_create(struct lws_context *context, const char *elements[],
 
 	for (n = 0; n < LWS_TLS_REQ_ELEMENT_COUNT; n++)
 		if (lws_tls_openssl_add_nid(subj, nid_list[n], elements[n])) {
-			lwsl_notice("%s: failed to add element %d\n", __func__, n);
+			lwsl_notice("%s: failed to add element %d\n", __func__,
+				    n);
 			goto bail3;
 		}
 
@@ -817,7 +849,8 @@ lws_tls_acme_sni_csr_create(struct lws_context *context, const char *elements[],
 	*privkey_pem = malloc(bio_len); /* malloc so user code can own / free */
 	*privkey_len = (size_t)bio_len;
 	if (!*privkey_pem) {
-		lwsl_notice("%s: need %ld for private key\n", __func__, bio_len);
+		lwsl_notice("%s: need %ld for private key\n", __func__,
+			    bio_len);
 		BIO_free(bio);
 		goto bail3;
 	}

@@ -23,7 +23,8 @@ using namespace std;
 #ifdef  __cplusplus
 extern "C" {
 #endif
-#include "../../external_libs/libwebsockets/src/lib/libwebsockets.h"
+//#include "../../external_libs/libwebsockets/src/lib/libwebsockets.h"
+#include "../../external_libs/libwebsockets/src/include/libwebsockets.h"
 #ifdef  __cplusplus
 }
 #endif
@@ -66,11 +67,10 @@ typedef int(*WSWRAP_CB_PROC)(void* inst, WEBSOCKWRAP_EVENT reason, void *in, siz
 
 class CWSClientWrapper
 {
-	const char *TAG = "CWSClientWrapper";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
 
 public:
-	MLog Log;
+
+    MLog Log;
 
     CWSClientWrapper(WSWRAP_CB_PROC OnEvent, void *userData);
     virtual ~CWSClientWrapper();

@@ -14,8 +14,8 @@
 class CloudStreamerSDK : public CUnk,
 						public ICameraManagerCallback
 {
-	const char *TAG = "CloudStreamerSDK";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+//	const char *TAG = "CloudStreamerSDK";
+//	const int LOG_LEVEL = 2; //Log.VERBOSE;
 	MLog Log;
 
 	ICloudStreamerCallback *mCallback;
@@ -27,6 +27,8 @@ class CloudStreamerSDK : public CUnk,
 	std::string mToken;
 	long long mCamid;
 	std::string mSvcpUrl;
+	
+	void* snap_handler;
 
 	//streamer CM
 	CameraManagerConfig mCameraManagerConfig;
@@ -35,13 +37,15 @@ class CloudStreamerSDK : public CUnk,
 	int closeCM();
 
 public:
-    CloudStreamerSDK(ICloudStreamerCallback *callback);
-    virtual ~CloudStreamerSDK();
+	CloudStreamerSDK(ICloudStreamerCallback *callback);
+	virtual ~CloudStreamerSDK();
 
 	int setSource(std::string &channel);
 
-    int Start();
+	int Start();
 	int Stop();
+
+	int sendCamEvent(const CameraEvent &camEvent);
 
 	//=>ICameraManagerCallback
 	void onPrepared();
@@ -51,6 +55,14 @@ public:
 	void onStreamStop();
 	void onCommand(std::string cmd);
 	void onUpdatePreview();
+	int  onRawMessage(std::string& data);
+	int  ConfirmUpload(std::string url);
+	void onRecvUploadUrl(std::string url, int refid);
+	void SetUserParam(void* ptr);
+	void* GetUserParam();
+	void onGetLog(std::string url);
+	int SetCamTimeZone(int tz);
+	int GetCamTimeZone();
 	//<=ICameraManagerCallback
 };
 

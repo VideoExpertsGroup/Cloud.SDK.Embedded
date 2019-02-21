@@ -13,6 +13,9 @@ public:
 	virtual void onError(int error) = 0;
 	virtual void onCameraConnected() = 0; // getCamera() to get the camera
 	virtual void onCommand(std::string cmd) = 0;
+	virtual int  onRawMsg(std::string& data) = 0;
+	virtual void onUploadUrl(void* inst, std::string url_push, int refid) = 0;//Got upload url for snapshot
+	virtual void onCamGetLog(std::string url) = 0;
 };
 
 #endif

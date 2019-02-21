@@ -14,6 +14,9 @@ public:
 	virtual void onStreamStop() = 0;
 	virtual void onCommand(std::string cmd) = 0;
 	virtual void onUpdatePreview() = 0;
+	virtual int  onRawMessage(std::string& data) = 0;
+	virtual void onRecvUploadUrl(std::string url, int refid) = 0;
+	virtual void onGetLog(std::string url) = 0;
 };
 
 #endif //__ICAMERAMANAGERWEBSOCKETCALLBACK_H__

@@ -23,8 +23,8 @@
 
 class CloudShareConnection : public CUnk 
 {
-	const char *TAG = "CloudShareConnection";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+//	const char *TAG = "CloudShareConnection";
+//	const int LOG_LEVEL = 2; //Log.VERBOSE;
 	MLog Log;
 
 	CloudAPI mCloudAPI;
@@ -33,7 +33,7 @@ class CloudShareConnection : public CUnk
 
 public:
 	CloudShareConnection()
-		:Log(TAG, LOG_LEVEL) 
+		:Log("CloudShareConnection", 2) 
 	{
 		mOpened = false;
 		m_ServerTimeDiff = 0;

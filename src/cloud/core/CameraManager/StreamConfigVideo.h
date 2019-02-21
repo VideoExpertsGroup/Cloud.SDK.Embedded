@@ -13,33 +13,8 @@ using namespace std;
 class StreamConfigVideo
 {
 
-/*
-	const char *TAG = "StreamConfigVideo";
-    const int LOG_LEVEL = 2; //Log.VERBOSE;
-
-	MLog Log;
-
-	int mVert = 480; // default value
-	int mHorz = 640; // default value
-	bool mVbr = true; // default value
-	double mFps = 30; // default value
-	int mGop = 30; // default value
-	int mQuality = 0; // default value
-	string mFormat = "H.264"; // default value
-	string mStream = "Vid"; // default value
-
-	const string HORZ = "horz";
-	const string VERT = "vert";
-	const string FORMAT = "format";
-	const string VBR = "vbr";
-	const string GOP = "gop";
-	const string STREAM = "stream";
-	const string QUALITY = "quality";
-	const string FPS = "fps";
-*/
-
-    char *TAG = "StreamConfigVideo";
-    int LOG_LEVEL = 2;
+//    const char *TAG = "StreamConfigVideo";
+//    const int LOG_LEVEL = 2;
     MLog Log;
 
     int mVert;
@@ -82,10 +57,10 @@ class StreamConfigVideo
     }
 
 public:
-    StreamConfigVideo() : Log(TAG, LOG_LEVEL) { const_init(); };
+    StreamConfigVideo() : Log("StreamConfigVideo", 2) { const_init(); };
 	virtual ~StreamConfigVideo() {};
 
-	StreamConfigVideo(string config) : Log(TAG, LOG_LEVEL) {
+	StreamConfigVideo(string config) : Log("StreamConfigVideo", 2) {
         const_init();
 		json_error_t err;
 		json_t *root = json_loads(config.c_str(), 0, &err);

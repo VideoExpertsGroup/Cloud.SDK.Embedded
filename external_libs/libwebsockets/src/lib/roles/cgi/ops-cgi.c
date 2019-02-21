@@ -75,6 +75,22 @@ rops_periodic_checks_cgi(struct lws_context *context, int tsi, time_t now)
 	return 0;
 }
 
+static int
+rops_destroy_role_cgi(struct lws *wsi)
+{
+#if defined(LWS_WITH_ZLIB)
+	if (!wsi->http.cgi)
+		return 0;
+	if (!wsi->http.cgi->gzip_init)
+		return 0;
+
+	inflateEnd(&wsi->http.cgi->inflate);
+	wsi->http.cgi->gzip_init = 0;
+#endif
+
+	return 0;
+}
+
 struct lws_role_ops role_ops_cgi = {
 	/* role name */			"cgi",
 	/* alpn id */			NULL,
@@ -95,10 +111,14 @@ struct lws_role_ops role_ops_cgi = {
 	/* close_via_role_protocol */	NULL,
 	/* close_role */		NULL,
 	/* close_kill_connection */	NULL,
-	/* destroy_role */		NULL,
+	/* destroy_role */		rops_destroy_role_cgi,
 	/* adoption_bind */		NULL,
 	/* client_bind */		NULL,
+	/* adoption_cb clnt, srv */	{ 0, 0 },
+	/* rx_cb clnt, srv */		{ 0, 0 },
 	/* writeable cb clnt, srv */	{ 0, 0 },
 	/* close cb clnt, srv */	{ 0, 0 },
+	/* protocol_bind_cb c,s */	{ 0, 0 },
+	/* protocol_unbind_cb c,s */	{ 0, 0 },
 	/* file_handle */		0,
 };

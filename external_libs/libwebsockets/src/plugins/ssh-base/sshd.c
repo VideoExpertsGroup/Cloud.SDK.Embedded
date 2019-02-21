@@ -1,7 +1,7 @@
 /*
  * libwebsockets - lws-plugin-ssh-base - sshd.c
  *
- * Copyright (C) 2017 Andy Green <andy@warmcat.com>
+ * Copyright (C) 2017 - 2018 Andy Green <andy@warmcat.com>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -84,28 +84,6 @@ lws_buf(uint8_t **p, void *s, uint32_t len)
 	*p += len;
 
 	return 0;
-}
-
-
-void
-explicit_bzero(void *p, size_t len)
-{
-	volatile uint8_t *vp = p;
-
-	while (len--)
-		*vp++ = 0;
-}
-
-int
-lws_timingsafe_bcmp(const void *a, const void *b, uint32_t len)
-{
-	const uint8_t *pa = a, *pb = b;
-	uint8_t sum = 0;
-
-	while (len--)
-		sum |= (*pa ^ *pb);
-
-	return sum;
 }
 
 void
@@ -402,7 +380,7 @@ lws_kex_destroy(struct per_session_data__sshd *pss)
 		pss->kex->I_S = NULL;
 	}
 
-	explicit_bzero(pss->kex, sizeof(*pss->kex));
+	lws_explicit_bzero(pss->kex, sizeof(*pss->kex));
 	free(pss->kex);
 	pss->kex = NULL;
 }
@@ -436,11 +414,11 @@ lws_ua_destroy(struct per_session_data__sshd *pss)
 	if (pss->ua->pubkey)
 		ssh_free(pss->ua->pubkey);
 	if (pss->ua->sig) {
-		explicit_bzero(pss->ua->sig, pss->ua->sig_len);
+		lws_explicit_bzero(pss->ua->sig, pss->ua->sig_len);
 		ssh_free(pss->ua->sig);
 	}
 
-	explicit_bzero(pss->ua, sizeof(*pss->ua));
+	lws_explicit_bzero(pss->ua, sizeof(*pss->ua));
 	free(pss->ua);
 	pss->ua = NULL;
 }
@@ -548,7 +526,7 @@ lws_ssh_exec_finish(void *finish_handle, int retcode)
 static int
 lws_ssh_parse_plaintext(struct per_session_data__sshd *pss, uint8_t *p, size_t len)
 {
-	struct lws_genrsa_elements el;
+	struct lws_gencrypto_keyelem e[LWS_GENCRYPTO_RSA_KEYEL_COUNT];
 	struct lws_genrsa_ctx ctx;
 	struct lws_ssh_channel *ch;
 	struct lws_subprotocol_scp *scp;
@@ -1114,6 +1092,7 @@ again:
 
 		case SSHS_NVC_DO_UAR_PUBKEY_BLOB:
 			pss->ua->pubkey = pss->last_alloc;
+			pss->last_alloc = NULL;
 			pss->ua->pubkey_len = pss->npos;
 			/*
 			 * RFC4253
@@ -1171,6 +1150,7 @@ again:
 			}
 			lwsl_info("SSHS_DO_UAR_SIG\n");
 			pss->ua->sig = pss->last_alloc;
+			pss->last_alloc = NULL;
 			pss->ua->sig_len = pss->npos;
 			pss->parser_state = SSHS_MSG_EAT_PADDING;
 
@@ -1245,19 +1225,21 @@ again:
 			 * the E and N factors
 			 */
 
-			memset(&el, 0, sizeof(el));
+			memset(e, 0, sizeof(e));
 			pp = pss->ua->pubkey;
 			m = lws_g32(&pp);
 			pp += m;
 			m = lws_g32(&pp);
-			el.e[JWK_KEY_E].buf = pp;
-			el.e[JWK_KEY_E].len = m;
+			e[LWS_GENCRYPTO_RSA_KEYEL_E].buf = pp;
+			e[LWS_GENCRYPTO_RSA_KEYEL_E].len = m;
 			pp += m;
 			m = lws_g32(&pp);
-			el.e[JWK_KEY_N].buf = pp;
-			el.e[JWK_KEY_N].len = m;
+			e[LWS_GENCRYPTO_RSA_KEYEL_N].buf = pp;
+			e[LWS_GENCRYPTO_RSA_KEYEL_N].len = m;
 
-			if (lws_genrsa_create(&ctx, &el))
+			if (lws_genrsa_create(&ctx, e, pss->vhd->context,
+					      LGRSAM_PKCS1_1_5,
+					      LWS_GENHASH_TYPE_UNKNOWN))
 				goto ua_fail;
 
 			/*
@@ -2586,7 +2568,7 @@ init_protocol_lws_ssh_base(struct lws_context *context,
 	}
 
 	c->protocols = protocols_sshd;
-	c->count_protocols = ARRAY_SIZE(protocols_sshd);
+	c->count_protocols = LWS_ARRAY_SIZE(protocols_sshd);
 	c->extensions = NULL;
 	c->count_extensions = 0;
 

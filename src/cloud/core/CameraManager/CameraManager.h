@@ -9,17 +9,18 @@
 #include "ICameraManagerCallback.h"
 
 #include "../../../utils/wswrap.h"
+#include "CameraEvent.h"
 
 class CameraManager : public CUnk
 {
-	const char *TAG = "CameraManager";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+//	const char *TAG = "CameraManager";
+//	const int LOG_LEVEL = 2; //Log.VERBOSE;
 
 	CameraManagerConfig mCameraManagerConfig;
 	ICameraManagerCallback *mCallback;
 
 	CWSClientWrapper mWebSocket;
-	int messageId = 1;
+	int messageId;
 
 	bool misPrepared;
 	bool misCamRegistered;
@@ -29,6 +30,10 @@ class CameraManager : public CUnk
 	bool misReconnect;
 	std::string mByeReason;
 
+	DWORD calling_thread_id;
+	
+	int m_nCamTZ;
+
 public:
 	MLog Log;
 
@@ -37,9 +42,15 @@ public:
 
 	int Open(CameraManagerConfig &config, ICameraManagerCallback *callback);
 	int Close();
+	int send_cam_event(const CameraEvent &camEvent);
 
 	std::string getCameraConfig() { return mCameraConfig; };
 	std::string getStreamUrl() { return mStreamUrl; };
+
+	int confirm_direct_upload(std::string url);
+
+	int set_cam_tz(int tz);
+	int get_cam_tz();
 
 private:
 	int Reconnect();
@@ -83,6 +94,12 @@ private:
 	int recv_cmd_SET_MOTION_DETECTION(std::string data);
 	int recv_cmd_SET_STREAM_CONFIG(std::string data);
 	int recv_cmd_GET_PTZ_CONF(std::string data);
+
+	int recv_cmd_RAW_MESSAGE(std::string data);
+
+	int recv_cmd_CAM_GET_LOG(std::string data);
+
 	//<=recv
+
 };
 #endif //__CAMERAMANAGERWEBSOCKET_H__

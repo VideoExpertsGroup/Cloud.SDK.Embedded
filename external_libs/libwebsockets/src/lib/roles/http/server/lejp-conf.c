@@ -1,7 +1,7 @@
 /*
  * libwebsockets web server application
  *
- * Copyright (C) 2010-2017 Andy Green <andy@warmcat.com>
+ * Copyright (C) 2010-2018 Andy Green <andy@warmcat.com>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -105,6 +105,19 @@ static const char * const paths_vhosts[] = {
 	"vhosts[].ignore-missing-cert",
 	"vhosts[].error-document-404",
 	"vhosts[].alpn",
+	"vhosts[].ssl-client-option-set",
+	"vhosts[].ssl-client-option-clear",
+	"vhosts[].tls13-ciphers",
+	"vhosts[].client-tls13-ciphers",
+	"vhosts[].strict-host-check",
+
+	"vhosts[].listen-accept-role",
+	"vhosts[].listen-accept-protocol",
+	"vhosts[].apply-listen-accept", /* deprecates "onlyraw" */
+	"vhosts[].fallback-listen-accept",
+	"vhosts[].allow-non-tls",
+	"vhosts[].redirect-http",
+	"vhosts[].allow-http-on-https",
 };
 
 enum lejp_vhost_paths {
@@ -156,6 +169,19 @@ enum lejp_vhost_paths {
 	LEJPVP_IGNORE_MISSING_CERT,
 	LEJPVP_ERROR_DOCUMENT_404,
 	LEJPVP_ALPN,
+	LEJPVP_SSL_CLIENT_OPTION_SET,
+	LEJPVP_SSL_CLIENT_OPTION_CLEAR,
+	LEJPVP_TLS13_CIPHERS,
+	LEJPVP_CLIENT_TLS13_CIPHERS,
+	LEJPVP_FLAG_STRICT_HOST_CHECK,
+
+	LEJPVP_LISTEN_ACCEPT_ROLE,
+	LEJPVP_LISTEN_ACCEPT_PROTOCOL,
+	LEJPVP_FLAG_APPLY_LISTEN_ACCEPT,
+	LEJPVP_FLAG_FALLBACK_LISTEN_ACCEPT,
+	LEJPVP_FLAG_ALLOW_NON_TLS,
+	LEJPVP_FLAG_REDIRECT_HTTP,
+	LEJPVP_FLAG_ALLOW_HTTP_ON_HTTPS,
 };
 
 static const char * const parser_errs[] = {
@@ -205,6 +231,7 @@ struct jpargs {
 	unsigned int enable_client_ssl:1;
 	unsigned int fresh_mount:1;
 	unsigned int any_vhosts:1;
+	unsigned int chunk:1;
 };
 
 static void *
@@ -212,6 +239,8 @@ lwsws_align(struct jpargs *a)
 {
 	if ((lws_intptr_t)(a->p) & 15)
 		a->p += 16 - ((lws_intptr_t)(a->p) & 15);
+
+	a->chunk = 0;
 
 	return a->p;
 }
@@ -225,11 +254,20 @@ arg_to_bool(const char *s)
 	if (n)
 		return 1;
 
-	for (n = 0; n < (int)ARRAY_SIZE(on); n++)
+	for (n = 0; n < (int)LWS_ARRAY_SIZE(on); n++)
 		if (!strcasecmp(s, on[n]))
 			return 1;
 
 	return 0;
+}
+
+static void
+set_reset_flag(unsigned int *p, const char *state, unsigned int flag)
+{
+	if (arg_to_bool(state))
+		*p |= flag;
+	else
+		*p &= ~(flag);
 }
 
 static signed char
@@ -249,7 +287,7 @@ lejp_globals_cb(struct lejp_ctx *ctx, char reason)
 		rej = lwsws_align(a);
 		a->p += sizeof(*rej);
 
-		n = lejp_get_wildcard(ctx, 0, a->p, a->end - a->p);
+		n = lejp_get_wildcard(ctx, 0, a->p, lws_ptr_diff(a->end, a->p));
 		rej->next = a->info->reject_service_keywords;
 		a->info->reject_service_keywords = rej;
 		rej->name = a->p;
@@ -400,7 +438,7 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 		a->pvo = lwsws_align(a);
 		a->p += sizeof(*a->pvo);
 
-		n = lejp_get_wildcard(ctx, 0, a->p, a->end - a->p);
+		n = lejp_get_wildcard(ctx, 0, a->p, lws_ptr_diff(a->end, a->p));
 		/* ie, enable this protocol, no options yet */
 		a->pvo->next = a->info->pvo;
 		a->info->pvo = a->pvo;
@@ -413,25 +451,31 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 	}
 
 	/* this catches, eg, vhosts[].headers[].xxx */
-	if (reason == LEJPCB_VAL_STR_END &&
+	if ((reason == LEJPCB_VAL_STR_END || reason == LEJPCB_VAL_STR_CHUNK) &&
 	    ctx->path_match == LEJPVP_HEADERS_NAME + 1) {
-		headers = lwsws_align(a);
-		a->p += sizeof(*headers);
 
-		n = lejp_get_wildcard(ctx, 0, a->p, a->end - a->p);
-		/* ie, enable this protocol, no options yet */
-		headers->next = a->info->headers;
-		a->info->headers = headers;
-		headers->name = a->p;
-		// lwsl_notice("  adding header %s=%s\n", a->p, ctx->buf);
-		a->p += n - 1;
-		*(a->p++) = ':';
-		if (a->p < a->end)
-			*(a->p++) = '\0';
-		else
-			*(a->p - 1) = '\0';
-		headers->value = a->p;
-		headers->options = NULL;
+		if (!a->chunk) {
+			headers = lwsws_align(a);
+			a->p += sizeof(*headers);
+
+			n = lejp_get_wildcard(ctx, 0, a->p,
+					lws_ptr_diff(a->end, a->p));
+			/* ie, add this header */
+			headers->next = a->info->headers;
+			a->info->headers = headers;
+			headers->name = a->p;
+
+			lwsl_notice("  adding header %s=%s\n", a->p, ctx->buf);
+			a->p += n - 1;
+			*(a->p++) = ':';
+			if (a->p < a->end)
+				*(a->p++) = '\0';
+			else
+				*(a->p - 1) = '\0';
+			headers->value = a->p;
+			headers->options = NULL;
+		}
+		a->chunk = reason == LEJPCB_VAL_STR_CHUNK;
 		goto dostring;
 	}
 
@@ -442,8 +486,9 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 		struct lws_vhost *vhost;
 
 		//lwsl_notice("%s\n", ctx->path);
-		if (!a->info->port) {
-			lwsl_err("Port required (eg, 443)");
+		if (!a->info->port &&
+		    !(a->info->options & LWS_SERVER_OPTION_UNIX_SOCK)) {
+			lwsl_err("Port required (eg, 443)\n");
 			return 1;
 		}
 		a->valid = 0;
@@ -459,13 +504,19 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 
 #if defined(LWS_WITH_TLS)
 		if (a->enable_client_ssl) {
-			const char *cert_filepath = a->info->client_ssl_cert_filepath;
-			const char *private_key_filepath = a->info->client_ssl_private_key_filepath;
-			const char *ca_filepath = a->info->client_ssl_ca_filepath;
-			const char *cipher_list = a->info->client_ssl_cipher_list;
+			const char *cert_filepath =
+					a->info->client_ssl_cert_filepath;
+			const char *private_key_filepath =
+				       a->info->client_ssl_private_key_filepath;
+			const char *ca_filepath =
+					a->info->client_ssl_ca_filepath;
+			const char *cipher_list =
+					a->info->client_ssl_cipher_list;
+
 			memset(a->info, 0, sizeof(*a->info));
 			a->info->client_ssl_cert_filepath = cert_filepath;
-			a->info->client_ssl_private_key_filepath = private_key_filepath;
+			a->info->client_ssl_private_key_filepath =
+							private_key_filepath;
 			a->info->client_ssl_ca_filepath = ca_filepath;
 			a->info->client_ssl_cipher_list = cipher_list;
 			a->info->options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
@@ -502,7 +553,7 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 		if (a->last)
 			a->last->mount_next = m;
 
-		for (n = 0; n < (int)ARRAY_SIZE(mount_protocols); n++)
+		for (n = 0; n < (int)LWS_ARRAY_SIZE(mount_protocols); n++)
 			if (!strncmp(a->m.origin, mount_protocols[n],
 			     strlen(mount_protocols[n]))) {
 				lwsl_info("----%s\n", a->m.origin);
@@ -512,7 +563,7 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 				break;
 			}
 
-		if (n == (int)ARRAY_SIZE(mount_protocols)) {
+		if (n == (int)LWS_ARRAY_SIZE(mount_protocols)) {
 			lwsl_err("unsupported protocol:// %s\n", a->m.origin);
 			return 1;
 		}
@@ -609,6 +660,13 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 	case LEJPVP_CIPHERS:
 		a->info->ssl_cipher_list = a->p;
 		break;
+	case LEJPVP_TLS13_CIPHERS:
+		a->info->tls1_3_plus_cipher_list = a->p;
+		break;
+	case LEJPVP_CLIENT_TLS13_CIPHERS:
+		a->info->client_tls_1_3_plus_cipher_list = a->p;
+		break;
+
 	case LEJPVP_ECDH_CURVE:
 		a->info->ecdh_curve = a->p;
 		break;
@@ -620,13 +678,13 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 		mp_cgienv->next = a->m.cgienv;
 		a->m.cgienv = mp_cgienv;
 
-		n = lejp_get_wildcard(ctx, 0, a->p, a->end - a->p);
+		n = lejp_get_wildcard(ctx, 0, a->p, lws_ptr_diff(a->end, a->p));
 		mp_cgienv->name = a->p;
 		a->p += n;
 		mp_cgienv->value = a->p;
 		mp_cgienv->options = NULL;
-		//lwsl_notice("    adding pmo / cgi-env '%s' = '%s'\n", mp_cgienv->name,
-		//		mp_cgienv->value);
+		//lwsl_notice("    adding pmo / cgi-env '%s' = '%s'\n",
+		//		mp_cgienv->name, mp_cgienv->value);
 		goto dostring;
 
 	case LEJPVP_PROTOCOL_NAME_OPT:
@@ -637,7 +695,7 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 		pvo = lwsws_align(a);
 		a->p += sizeof(*a->pvo);
 
-		n = lejp_get_wildcard(ctx, 1, a->p, a->end - a->p);
+		n = lejp_get_wildcard(ctx, 1, a->p, lws_ptr_diff(a->end, a->p));
 		/* ie, enable this protocol, no options yet */
 		pvo->next = a->pvo->options;
 		a->pvo->options = pvo;
@@ -651,12 +709,12 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 		a->pvo_em = lwsws_align(a);
 		a->p += sizeof(*a->pvo_em);
 
-		n = lejp_get_wildcard(ctx, 0, a->p, a->end - a->p);
+		n = lejp_get_wildcard(ctx, 0, a->p, lws_ptr_diff(a->end, a->p));
 		/* ie, enable this protocol, no options yet */
 		a->pvo_em->next = a->m.extra_mimetypes;
 		a->m.extra_mimetypes = a->pvo_em;
 		a->pvo_em->name = a->p;
-		lwsl_notice("  adding extra-mimetypes %s -> %s\n", a->p, ctx->buf);
+		lwsl_notice("  + extra-mimetypes %s -> %s\n", a->p, ctx->buf);
 		a->p += n;
 		a->pvo_em->value = a->p;
 		a->pvo_em->options = NULL;
@@ -666,7 +724,7 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 		a->pvo_int = lwsws_align(a);
 		a->p += sizeof(*a->pvo_int);
 
-		n = lejp_get_wildcard(ctx, 0, a->p, a->end - a->p);
+		n = lejp_get_wildcard(ctx, 0, a->p, lws_ptr_diff(a->end, a->p));
 		/* ie, enable this protocol, no options yet */
 		a->pvo_int->next = a->m.interpret;
 		a->m.interpret = a->pvo_int;
@@ -694,25 +752,19 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 #endif
 
 	case LEJPVP_NOIPV6:
-		if (arg_to_bool(ctx->buf))
-			a->info->options |= LWS_SERVER_OPTION_DISABLE_IPV6;
-		else
-			a->info->options &= ~(LWS_SERVER_OPTION_DISABLE_IPV6);
+		set_reset_flag(&a->info->options, ctx->buf,
+			       LWS_SERVER_OPTION_DISABLE_IPV6);
 		return 0;
 
 	case LEJPVP_FLAG_ONLYRAW:
-		if (arg_to_bool(ctx->buf))
-			a->info->options |= LWS_SERVER_OPTION_ONLY_RAW;
-		else
-			a->info->options &= ~(LWS_SERVER_OPTION_ONLY_RAW);
+		set_reset_flag(&a->info->options, ctx->buf,
+			    LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG);
 		return 0;
 
 	case LEJPVP_IPV6ONLY:
 		a->info->options |= LWS_SERVER_OPTION_IPV6_V6ONLY_MODIFY;
-		if (arg_to_bool(ctx->buf))
-			a->info->options |= LWS_SERVER_OPTION_IPV6_V6ONLY_VALUE;
-		else
-			a->info->options &= ~(LWS_SERVER_OPTION_IPV6_V6ONLY_VALUE);
+		set_reset_flag(&a->info->options, ctx->buf,
+			       LWS_SERVER_OPTION_IPV6_V6ONLY_VALUE);
 		return 0;
 
 	case LEJPVP_FLAG_CLIENT_CERT_REQUIRED:
@@ -722,11 +774,13 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 		return 0;
 
 	case LEJPVP_IGNORE_MISSING_CERT:
-		if (arg_to_bool(ctx->buf))
-			a->info->options |= LWS_SERVER_OPTION_IGNORE_MISSING_CERT;
-		else
-			a->info->options &= ~(LWS_SERVER_OPTION_IGNORE_MISSING_CERT);
+		set_reset_flag(&a->info->options, ctx->buf,
+				LWS_SERVER_OPTION_IGNORE_MISSING_CERT);
+		return 0;
 
+	case LEJPVP_FLAG_STRICT_HOST_CHECK:
+		set_reset_flag(&a->info->options, ctx->buf,
+			LWS_SERVER_OPTION_VHOST_UPG_STRICT_HOST_CHECK);
 		return 0;
 
 	case LEJPVP_ERROR_DOCUMENT_404:
@@ -740,9 +794,46 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 		a->info->ssl_options_clear |= atol(ctx->buf);
 		return 0;
 
+	case LEJPVP_SSL_CLIENT_OPTION_SET:
+		a->info->ssl_client_options_set |= atol(ctx->buf);
+		return 0;
+	case LEJPVP_SSL_CLIENT_OPTION_CLEAR:
+		a->info->ssl_client_options_clear |= atol(ctx->buf);
+		return 0;
+
 	case LEJPVP_ALPN:
 		a->info->alpn = a->p;
 		break;
+
+	case LEJPVP_LISTEN_ACCEPT_ROLE:
+		a->info->listen_accept_role = a->p;
+		break;
+	case LEJPVP_LISTEN_ACCEPT_PROTOCOL:
+		a->info->listen_accept_protocol = a->p;
+		break;
+
+	case LEJPVP_FLAG_APPLY_LISTEN_ACCEPT:
+		set_reset_flag(&a->info->options, ctx->buf,
+			LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG);
+		return 0;
+	case LEJPVP_FLAG_FALLBACK_LISTEN_ACCEPT:
+		lwsl_notice("vh %s: LEJPVP_FLAG_FALLBACK_LISTEN_ACCEPT: %s\n",
+			    a->info->vhost_name, ctx->buf);
+		set_reset_flag(&a->info->options, ctx->buf,
+		      LWS_SERVER_OPTION_FALLBACK_TO_APPLY_LISTEN_ACCEPT_CONFIG);
+		return 0;
+	case LEJPVP_FLAG_ALLOW_NON_TLS:
+		set_reset_flag(&a->info->options, ctx->buf,
+			       LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT);
+		return 0;
+	case LEJPVP_FLAG_REDIRECT_HTTP:
+		set_reset_flag(&a->info->options, ctx->buf,
+			       LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS);
+		return 0;
+	case LEJPVP_FLAG_ALLOW_HTTP_ON_HTTPS:
+		set_reset_flag(&a->info->options, ctx->buf,
+			       LWS_SERVER_OPTION_ALLOW_HTTP_ON_HTTPS_LISTENER);
+		return 0;
 
 	default:
 		return 0;
@@ -750,19 +841,22 @@ lejp_vhosts_cb(struct lejp_ctx *ctx, char reason)
 
 dostring:
 	p = ctx->buf;
+	p[LEJP_STRING_CHUNK] = '\0';
 	p1 = strstr(p, ESC_INSTALL_DATADIR);
 	if (p1) {
-		n = p1 - p;
+		n = lws_ptr_diff(p1, p);
 		if (n > a->end - a->p)
-			n = a->end - a->p;
+			n = lws_ptr_diff(a->end, a->p);
 		lws_strncpy(a->p, p, n + 1);
 		a->p += n;
-		a->p += lws_snprintf(a->p, a->end - a->p, "%s", LWS_INSTALL_DATADIR);
+		a->p += lws_snprintf(a->p, a->end - a->p, "%s",
+				     LWS_INSTALL_DATADIR);
 		p += n + strlen(ESC_INSTALL_DATADIR);
 	}
 
 	a->p += lws_snprintf(a->p, a->end - a->p, "%s", p);
-	*(a->p)++ = '\0';
+	if (reason == LEJPCB_VAL_STR_END)
+		*(a->p)++ = '\0';
 
 	return 0;
 }
@@ -779,7 +873,7 @@ lwsws_get_config(void *user, const char *f, const char * const *paths,
 	struct lejp_ctx ctx;
 	int n, m, fd;
 
-	fd = open(f, O_RDONLY);
+	fd = lws_open(f, O_RDONLY);
 	if (fd < 0) {
 		lwsl_err("Cannot open %s\n", f);
 		return 2;
@@ -861,12 +955,12 @@ static int
 lwsws_get_config_d(void *user, const char *d, const char * const *paths,
 		   int count_paths, lejp_callback cb)
 {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(LWS_WITH_ESP32)
 	struct dirent **namelist;
 	char path[256];
 	int n, i, ret = 0;
 
-	n = scandir(d, &namelist, filter, alphasort);
+	n = scandir((char *) d, &namelist, filter, alphasort);
 	if (n < 0) {
 		lwsl_err("Scandir on %s failed\n", d);
 		return 1;
@@ -927,17 +1021,18 @@ lwsws_get_config_globals(struct lws_context_creation_info *info, const char *d,
 
 	lws_snprintf(dd, sizeof(dd) - 1, "%s/conf", d);
 	if (lwsws_get_config(&a, dd, paths_global,
-			     ARRAY_SIZE(paths_global), lejp_globals_cb) > 1)
+			     LWS_ARRAY_SIZE(paths_global), lejp_globals_cb) > 1)
 		return 1;
 	lws_snprintf(dd, sizeof(dd) - 1, "%s/conf.d", d);
 	if (lwsws_get_config_d(&a, dd, paths_global,
-			       ARRAY_SIZE(paths_global), lejp_globals_cb) > 1)
+			       LWS_ARRAY_SIZE(paths_global),
+			       lejp_globals_cb) > 1)
 		return 1;
 
 	a.plugin_dirs[a.count_plugin_dirs] = NULL;
 
 	*cs = a.p;
-	*len = a.end - a.p;
+	*len = lws_ptr_diff(a.end, a.p);
 
 	return 0;
 }
@@ -962,15 +1057,15 @@ lwsws_get_config_vhosts(struct lws_context *context,
 
 	lws_snprintf(dd, sizeof(dd) - 1, "%s/conf", d);
 	if (lwsws_get_config(&a, dd, paths_vhosts,
-			     ARRAY_SIZE(paths_vhosts), lejp_vhosts_cb) > 1)
+			     LWS_ARRAY_SIZE(paths_vhosts), lejp_vhosts_cb) > 1)
 		return 1;
 	lws_snprintf(dd, sizeof(dd) - 1, "%s/conf.d", d);
 	if (lwsws_get_config_d(&a, dd, paths_vhosts,
-			       ARRAY_SIZE(paths_vhosts), lejp_vhosts_cb) > 1)
+			       LWS_ARRAY_SIZE(paths_vhosts), lejp_vhosts_cb) > 1)
 		return 1;
 
 	*cs = a.p;
-	*len = a.end - a.p;
+	*len = lws_ptr_diff(a.end, a.p);
 
 	if (!a.any_vhosts) {
 		lwsl_err("Need at least one vhost\n");

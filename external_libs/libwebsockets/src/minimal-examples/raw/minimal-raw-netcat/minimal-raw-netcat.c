@@ -37,6 +37,7 @@ static int
 callback_raw_test(struct lws *wsi, enum lws_callback_reasons reason,
 		  void *user, void *in, size_t len)
 {
+	const char *cp = (const char *)in;
 
 	switch (reason) {
 
@@ -93,7 +94,7 @@ callback_raw_test(struct lws *wsi, enum lws_callback_reasons reason,
 	case LWS_CALLBACK_RAW_RX:
 		lwsl_user("LWS_CALLBACK_RAW_RX (%d)\n", (int)len);
 		while (len--)
-			putchar(*((const char *)in++));
+			putchar(*cp++);
 		fflush(stdout);
 		break;
 
@@ -140,13 +141,7 @@ int main(int argc, const char **argv)
 	struct addrinfo h, *r, *rp;
 	struct lws_vhost *vhost;
 	const char *p;
-	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE
-			/* for LLL_ verbosity above NOTICE to be built into lws,
-			 * lws must have been configured and built with
-			 * -DCMAKE_BUILD_TYPE=DEBUG instead of =RELEASE */
-			/* | LLL_INFO */ /* | LLL_PARSER */ /* | LLL_HEADER */
-			/* | LLL_EXT */ /* | LLL_CLIENT */ /* | LLL_LATENCY */
-			/* | LLL_DEBUG */;
+	int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
 
 	signal(SIGINT, sigint_handler);
 

@@ -11,43 +11,43 @@
 using namespace std;
 
 class CameraManagerConfig : public CUnk {
-	const char *TAG = "CameraManagerConfig";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+//	const char *TAG;
+//	const int LOG_LEVEL;
 	MLog Log;
 
-	string mUploadUrl = "";
-	string mMediaServer = "";
-	string mCamPath = "";
-	string mCA = ""; // TODO
-	string mSID = "";
-	string mPwd = "";
-	string mUUID = "";
-	string mConnID = "";
-	long long mCamID = 0;
+	string mUploadUrl;
+	string mMediaServer;
+	string mCamPath;
+	string mCA;// TODO
+	string mSID;
+	string mPwd;
+	string mUUID;
+	string mConnID;
+	long long mCamID;
 	CloudRegToken mRegToken;
 
 	// some camera details
-	bool mCameraActivity = false;
-	bool mCameraStreaming = true;
-	bool mCameraStatusLed = false;
-	string mCameraIPAddress = "";
-	string mCMVersion = "";
-	string mCameraBrand = "";
-	string mCameraModel = "";
-	string mCameraSerialNumber = "";
-	string mCameraVersion = "";
-	string mCameraTimezone = "";
-	string mCameraVendor = "";
-	StreamConfig *mStreamConfig = NULL;
+	bool mCameraActivity;
+	bool mCameraStreaming;
+	bool mCameraStatusLed;
+	string mCameraIPAddress;
+	string mCMVersion;
+	string mCameraBrand;
+	string mCameraModel;
+	string mCameraSerialNumber;
+	string mCameraVersion;
+	string mCameraTimezone;
+	string mCameraVendor;
+	StreamConfig *mStreamConfig;
 
 	// WS(S) - 8888(8883)
 	// default parameters
-	string PROTOCOL = "ws://";
-	string DEFAULT_ADDRESS = "cam.skyvr.videoexpertsgroup.com";
-	string mAddress = DEFAULT_ADDRESS;
-	int PORT = 8888;
+	string PROTOCOL;
+	string DEFAULT_ADDRESS;
+	string mAddress;
+	int PORT;
 
-	string mReconnectAddress = "";
+	string mReconnectAddress;
 
 public:
 	virtual ~CameraManagerConfig() {
@@ -56,16 +56,48 @@ public:
 	};
 
 	CameraManagerConfig() 
-		: Log(TAG, LOG_LEVEL) 
+		: Log("CameraManagerConfig", 2) 
 	{
 		mCameraIPAddress = "127.0.0.1";//CameraManagerHelper.getLocalIpAddress();
 		mCameraBrand = "Camera Brand";//Build.BRAND;
 		mCameraModel = "Camera Model"; //Build.MODEL;
 		mCameraSerialNumber = "Camera Serial"; //Build.SERIAL;
-		mCameraVersion = "1";
+		mCameraVersion = "3"; //"1" in CloudDK.Android
 		mCMVersion = "Camera CM";
 		mCameraVendor = "vendor";
 		mCameraTimezone = "UTC";//TimeZone.getDefault().getID();
+
+//		TAG = "CameraManagerConfig";
+//		LOG_LEVEL = 2;
+		mUploadUrl = "";
+		mMediaServer = "";
+		mCamPath = "";
+		mCA = ""; // TODO
+		mSID = "";
+		mPwd = "";
+		mUUID = "";
+		mConnID = "";
+		mCamID = 0;
+		mRegToken;
+
+		mCameraActivity = false;
+		mCameraStreaming = true;
+		mCameraStatusLed = false;
+		mCameraIPAddress = "";
+		mCMVersion = "";
+		mCameraBrand = "";
+		mCameraModel = "";
+		mCameraSerialNumber = "";
+		mCameraVersion = "";
+		mCameraTimezone = "";
+		mCameraVendor = "";
+		mStreamConfig = NULL;
+
+		PROTOCOL = "ws://";
+		DEFAULT_ADDRESS = "cam.skyvr.videoexpertsgroup.com";
+		mAddress = DEFAULT_ADDRESS;
+		PORT = 8888;
+		mReconnectAddress = "";
 
 		configureStreamConfig();
 	}
@@ -227,21 +259,24 @@ public:
 	}*/
 
 	string getAddress() {
-		Log.v("getAddress");
+		Log.v("getAddress isEmpty=%d" , mRegToken.isEmpty());
 
 		string uri;
 		string address = mReconnectAddress.empty() ? mAddress : mReconnectAddress;
 		bool noPort = (address.find(":") == string::npos);
 
-		if ( !getConnID().empty() ) {
-			uri = PROTOCOL + address + (noPort ?":" + fto_string(PORT) :"") + "/ctl/" + getConnID() + "/";
-		}
-		else if (!mRegToken.isEmpty()) {
+		if (!mRegToken.isEmpty()) {
 			uri = PROTOCOL + address + (noPort ? ":" + fto_string(PORT) : "") + "/ctl/NEW/" + mRegToken.getToken() + "/";
+		}
+		else if ( !getConnID().empty() ) {
+			uri = PROTOCOL + address + (noPort ?":" + fto_string(PORT) :"") + "/ctl/" + getConnID() + "/";
 		}
 		else {
 			Log.e("getAddress, error");
 		}
+
+		Log.v("getAddress %s" ,uri.c_str());
+		
 		return uri;
 	}
 

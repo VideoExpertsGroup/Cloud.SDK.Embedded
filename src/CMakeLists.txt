@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 2.8)
 set(JANSSON_BUILD_DIR        lib CACHE PATH "Jansson build directory")
 set(LIBWEBSOCKETS_BUILD_DIR  lib CACHE PATH "Libwebsockets build directory")
 
+option(HIKVISION_BUILD "Build for HIKVISION" OFF) 
+
 message(${JANSSON_BUILD_DIR})
 message(${LIBWEBSOCKETS_BUILD_DIR})
 
@@ -10,7 +12,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
-set (CMAKE_CXX_FLAGS "-std=c++11 -fPIC")
+#set (CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Os")
+set (CMAKE_CXX_FLAGS "-fPIC -Os -Wno-psabi -Wconversion-null")
+
+
+if(HIKVISION_BUILD)
+    target_compile_definitions(cloudsdk PUBLIC HIKVISION_BUILD=1)
+endif()
+
 
 include_directories(${JANSSON_BUILD_DIR}/include
                     ${LIBWEBSOCKETS_BUILD_DIR}/include
@@ -35,7 +44,7 @@ add_library( # Specifies the name of the library.
           cloudsdk
 
           # Sets the library as a shared library.
-          SHARED
+          STATIC
 
           # Provides a relative path to your source file(s).
 	    Enums/CloudReturnCodes.h
@@ -51,6 +60,7 @@ add_library( # Specifies the name of the library.
 	    cloud/core/CameraManager/StreamConfig.h 
 	    cloud/core/CameraManager/StreamConfigAudio.h 
 	    cloud/core/CameraManager/StreamConfigVideo.h 
+	    cloud/core/CameraManager/CameraEvent.h
 
 	    cloud/core/CloudCommon/CloudRegToken.h 
 	    cloud/core/CloudCommon/CloudToken.h 
@@ -76,14 +86,15 @@ add_library( # Specifies the name of the library.
 	    utils/windefsws.h 
 	    utils/wswrap.cpp 
 	    utils/wswrap.h 
-
+	    utils/FileRing.cpp
+	    utils/FileRing.h
 	    CloudSDK.h
 	    CloudStreamerSDK.cpp 
 	    CloudStreamerSDK.h 
 )
 
-target_link_libraries( # Specifies the target library.
-                       cloudsdk
-                       ${jansson}
-                       ${libwebsockets}
-)
+#target_link_libraries( # Specifies the target library.
+#                       cloudsdk
+#                       ${jansson}
+#                       ${libwebsockets}
+#)

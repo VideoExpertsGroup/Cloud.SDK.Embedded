@@ -30,12 +30,12 @@ rops_handle_POLLIN_raw_skt(struct lws_context_per_thread *pt, struct lws *wsi,
 
 	/* pending truncated sends have uber priority */
 
-	if (wsi->trunc_len) {
+	if (lws_has_buffered_out(wsi)) {
 		if (!(pollfd->revents & LWS_POLLOUT))
 			return LWS_HPI_RET_HANDLED;
 
-		if (lws_issue_raw(wsi, wsi->trunc_alloc + wsi->trunc_offset,
-				  wsi->trunc_len) < 0)
+		/* drain the output buflist */
+		if (lws_issue_raw(wsi, NULL, 0) < 0)
 			goto fail;
 		/*
 		 * we can't afford to allow input processing to send
@@ -109,7 +109,7 @@ try_pollout:
 				LWSSTATS_C_WRITEABLE_CB, 1);
 #if defined(LWS_WITH_STATS)
 	if (wsi->active_writable_req_us) {
-		uint64_t ul = time_in_microseconds() -
+		uint64_t ul = lws_time_in_microseconds() -
 				wsi->active_writable_req_us;
 
 		lws_stats_atomic_bump(wsi->context, pt,
@@ -144,7 +144,7 @@ rops_adoption_bind_raw_skt(struct lws *wsi, int type, const char *vh_prot_name)
 	    (type & _LWS_ADOPT_FINISH))
 		return 0; /* no match */
 
-#if !defined(LWS_WITH_ESP32)
+#if !defined(LWS_WITH_ESP32) && !defined(LWS_PLAT_OPTEE)
 	if (type & LWS_ADOPT_FLAG_UDP)
 		/*
 		 * these can be >128 bytes, so just alloc for UDP
@@ -152,15 +152,16 @@ rops_adoption_bind_raw_skt(struct lws *wsi, int type, const char *vh_prot_name)
 		wsi->udp = lws_malloc(sizeof(*wsi->udp), "udp struct");
 #endif
 
-	if (!vh_prot_name)
-		lws_bind_protocol(wsi, wsi->protocol);
+	lws_role_transition(wsi, 0, (type & LWS_ADOPT_ALLOW_SSL) ? LRS_SSL_INIT :
+				LRS_ESTABLISHED, &role_ops_raw_skt);
+
+	if (vh_prot_name)
+		lws_bind_protocol(wsi, wsi->protocol, __func__);
 	else
 		/* this is the only time he will transition */
 		lws_bind_protocol(wsi,
-			&wsi->vhost->protocols[wsi->vhost->raw_protocol_index]);
-
-	lws_role_transition(wsi, 0, type & LWS_ADOPT_ALLOW_SSL ? LRS_SSL_INIT :
-				LRS_ESTABLISHED, &role_ops_raw_skt);
+			&wsi->vhost->protocols[wsi->vhost->raw_protocol_index],
+			__func__);
 
 	return 1; /* bound */
 }
@@ -222,7 +223,15 @@ struct lws_role_ops role_ops_raw_skt = {
 #else
 					NULL,
 #endif
+	/* adoption_cb clnt, srv */	{ LWS_CALLBACK_RAW_ADOPT,
+					  LWS_CALLBACK_RAW_ADOPT },
+	/* rx_cb clnt, srv */		{ LWS_CALLBACK_RAW_RX,
+					  LWS_CALLBACK_RAW_RX },
 	/* writeable cb clnt, srv */	{ LWS_CALLBACK_RAW_WRITEABLE, 0 },
 	/* close cb clnt, srv */	{ LWS_CALLBACK_RAW_CLOSE, 0 },
+	/* protocol_bind cb c, srv */	{ LWS_CALLBACK_RAW_SKT_BIND_PROTOCOL,
+					  LWS_CALLBACK_RAW_SKT_BIND_PROTOCOL },
+	/* protocol_unbind cb c, srv */	{ LWS_CALLBACK_RAW_SKT_DROP_PROTOCOL,
+					  LWS_CALLBACK_RAW_SKT_DROP_PROTOCOL },
 	/* file_handle */		0,
 };

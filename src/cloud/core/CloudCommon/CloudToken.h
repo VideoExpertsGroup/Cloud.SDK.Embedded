@@ -23,8 +23,8 @@
 using namespace std;
 
 class CloudToken : public CUnk {
-	const char *TAG = "CloudToken";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+//	const char *TAG = "CloudToken";
+//	const int LOG_LEVEL = 2; //Log.VERBOSE;
 	MLog Log;
 
 	string mToken;
@@ -37,7 +37,7 @@ class CloudToken : public CUnk {
 public:
 
 	CloudToken(string json_data)
-		:Log(TAG, LOG_LEVEL)
+		:Log("CloudToken", 2)
 	{
 		mHasError = true;
 		mErrorDetail = "Invalid json";
@@ -79,7 +79,7 @@ public:
 	}
 
 	CloudToken()
-		:Log(TAG, LOG_LEVEL)
+		:Log("CloudToken", 2)
 	{
 		// nothing
 		mHasError = true;

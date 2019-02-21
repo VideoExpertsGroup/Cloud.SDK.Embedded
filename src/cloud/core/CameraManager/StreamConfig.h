@@ -16,21 +16,24 @@ using namespace std;
 
 class StreamConfig : public CUnk
 {
-	const char *TAG = "StreamConfig";
-	const int LOG_LEVEL = 2; //Log.VERBOSE;
+//	const char *TAG = "StreamConfig";
+//	const int LOG_LEVEL = 2; //Log.VERBOSE;
 	MLog Log;
 
-	string VIDEO = "video";
-	string AUDIO = "audio";
+	string VIDEO;
+	string AUDIO;
 
 	vector<StreamConfigVideo> video_streams;
 	vector<StreamConfigAudio> audio_streams;
 
 public:
-	StreamConfig() : Log(TAG, LOG_LEVEL) {};
+	StreamConfig() : Log("StreamConfig", 2) {VIDEO = "video";AUDIO = "audio";};
 	virtual ~StreamConfig() {};
 
-	StreamConfig(string &config) : Log(TAG, LOG_LEVEL) {
+	StreamConfig(string &config) : Log("StreamConfig", 2) {
+
+		VIDEO = "video";
+		AUDIO = "audio";
 
 		json_error_t err;
 		json_t *root = json_loads(config.c_str(), 0, &err);

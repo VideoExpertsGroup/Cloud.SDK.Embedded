@@ -119,6 +119,10 @@ cull_lagging_clients(struct per_vhost_data__minimal *vhd)
 
 	} lws_end_foreach_llp_safe(ppss);
 
+	/* it would mean we lost track of oldest... but Coverity insists */
+	if (!old_pss)
+		return;
+
 	/*
 	 * Let's recover (ie, free up) all the ring slots between the
 	 * original oldest's last one and the "worst" survivor.
@@ -199,8 +203,8 @@ callback_minimal(struct lws *wsi, enum lws_callback_reasons reason,
 			break;
 
 		/* notice we allowed for LWS_PRE in the payload already */
-		m = lws_write(wsi, pmsg->payload + LWS_PRE, pmsg->len,
-			      LWS_WRITE_TEXT);
+		m = lws_write(wsi, ((unsigned char *)pmsg->payload) +
+			      LWS_PRE, pmsg->len, LWS_WRITE_TEXT);
 		if (m < (int)pmsg->len) {
 			lwsl_err("ERROR %d writing to ws socket\n", m);
 			return -1;
@@ -295,7 +299,7 @@ init_protocol_minimal(struct lws_context *context,
 	}
 
 	c->protocols = protocols;
-	c->count_protocols = ARRAY_SIZE(protocols);
+	c->count_protocols = LWS_ARRAY_SIZE(protocols);
 	c->extensions = NULL;
 	c->count_extensions = 0;
 

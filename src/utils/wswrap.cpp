@@ -52,7 +52,7 @@ static int ws_callback(lws *wsi, lws_callback_reasons reason, void *user, void *
 }
 
 CWSClientWrapper::CWSClientWrapper(WSWRAP_CB_PROC OnEvent, void *userData)
-	:Log(TAG, LOG_LEVEL)
+	:Log("CWSClientWrapper", 2)
 {
     m_OnEvent = OnEvent;
 	m_UserData = userData;
@@ -224,17 +224,21 @@ void* PendingThread(LPVOID pParam)
 {
     //logprintf(DEBUG_LEVEL_DEBUG, "PendingThread started\n");
     CWSClientWrapper* pWrapper = (CWSClientWrapper*)pParam;
-	pWrapper->Log.v("=>PendingThread");
+	pWrapper->Log.v("=>PendingThread %d",pWrapper->m_bDisconnectFlag);
 
-	while (!pWrapper->m_bDisconnectFlag && pWrapper->GetWsi())
+    while (!pWrapper->m_bDisconnectFlag && pWrapper->GetWsi())
     {
+		  //pWrapper->Log.v("=>PendingThread %d",pWrapper->isConnected()); 
         if (pWrapper->isConnected())
         {
             //CAutoLock lock(&pWrapper->m_csProcLock);
             lws_context* ctx = (lws_context*)pWrapper->GetContext();
-            lws_service(ctx, pWrapper->m_nPendingTimeout);
-            lws_callback_on_writable_all_protocol(ctx, (lws_protocols*)(pWrapper->GetProtocols()));
+            if(ctx)
+            {
+                lws_service(ctx, pWrapper->m_nPendingTimeout);
+                lws_callback_on_writable_all_protocol(ctx, (lws_protocols*)(pWrapper->GetProtocols()));
             //lws_callback_on_writable((lws*)pWrapper->GetWsi());
+            }
         }
         Sleep(10);
     }
@@ -276,7 +280,7 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
     int use_ssl = LCCSCF_USE_SSL | LCCSCF_ALLOW_SELFSIGNED;
     if (!strcmp(proto, "http") || !strcmp(proto, "ws"))
         use_ssl = 0;
-	Log.v("use_ssl=%d\n", use_ssl);
+	Log.v("use_ssl=%d", use_ssl);
 
     m_Protocols[0].name = m_szProto;
     m_Protocols[0].callback = &ws_callback;
@@ -285,6 +289,12 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
     memset(&m_CreateInfo, 0, sizeof m_CreateInfo);
     m_CreateInfo.port = CONTEXT_PORT_NO_LISTEN;
     m_CreateInfo.protocols = m_Protocols;
+	 m_CreateInfo.ka_time				= 3;
+	 m_CreateInfo.ka_probes				= 3;
+	 m_CreateInfo.ka_interval 			= 1;
+	 m_CreateInfo.keepalive_timeout	= 30;
+
+    
 //    m_CreateInfo.gid = -1;
 //    m_CreateInfo.uid = -1;
     if (use_ssl)
@@ -301,13 +311,13 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
     else
         m_nPendingTimeout = 100;
 
-	Log.v("Connect\n");
+	Log.v("Connect");
     memset(&m_ClientInfo, 0, sizeof(m_ClientInfo));
     m_pContext = lws_create_context(&m_CreateInfo);
 
     if (m_pContext == NULL)
     {
-		Log.v("Context is NULL\n");
+		Log.v("Context is NULL");
         if (szUrl)free(szUrl);
         return -1;
     }
@@ -344,17 +354,21 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
     m_ClientInfo.pwsi = &m_pWsi;
     m_ClientInfo.userdata = this;
 
-    lws_client_connect_via_info(&m_ClientInfo);
+	 struct lws *cwsi;
 
-    if (!m_pWsi)
+    cwsi = lws_client_connect_via_info(&m_ClientInfo);
+
+	 Log.v("lws_client_connect_via_info  %x : %x" , cwsi, m_pWsi); 
+	 
+    if (m_pWsi == NULL || cwsi == NULL)
     {
-		Log.v("Wsi create error\n");
+		Log.v("Wsi create error");
         if (szUrl)free(szUrl);
         if (szPath)free(szPath);
         return -1;
     }
 
-	Log.v("Wsi create success 0x%X\n" , m_pWsi);
+	Log.v("Wsi create success 0x%X" , m_pWsi);
 
     m_bDisconnectFlag = 0;
     DWORD dwThreadId = 0;
@@ -365,36 +379,45 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
 
     m_bConnected = 1;
 
+	 lws_set_log_level(LLL_DEBUG, NULL);
+
+
     return 0;
 }
 
 int CWSClientWrapper::cbProc(void* _inst, int reason, void *in, size_t len)
 {
 
-    if (0x3A == reason)//_inst is not CWSClientWrapper* instance, don't use
-        return 1;
 
     CWSClientWrapper* inst = (CWSClientWrapper*)_inst;
+
+	 if (!(reason == 34 || reason == 35 || reason == 36 || reason == 10)) 
+			 inst->Log.v("CWSClientWrapper::cbProc reason %d %d",reason, len); 
+
+    if (0x3A == reason)//_inst is not CWSClientWrapper* instance, don't use
+        return 1;
 
     switch (reason)
     {
         case LWS_CALLBACK_PROTOCOL_INIT:
         {
-            inst->Log.v("LWS_CALLBACK_PROTOCOL_INIT\n");
+            inst->Log.v("LWS_CALLBACK_PROTOCOL_INIT");
             break;
         }
         case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
         {
-            inst->AddEvent(WEBSOCKWRAP_ERROR, NULL, 0);
-            lws_cancel_service(lws_get_context(inst->m_pWsi));
+            inst->AddEvent(WEBSOCKWRAP_ERROR, NULL, 0);	
+            if(inst->m_pWsi)
+                lws_cancel_service(lws_get_context(inst->m_pWsi));
             inst->m_pWsi = NULL;
             inst->m_bConnected = 0;
+            inst->Log.v("LWS_CALLBACK_CLIENT_CONNECTION_ERROR");
             break;
         }
 
         case LWS_CALLBACK_CLIENT_WRITEABLE:
         {
-            //inst->Log.v("LWS_CALLBACK_CLIENT_WRITEABLE\n");
+            //inst->Log.v("LWS_CALLBACK_CLIENT_WRITEABLE");
             send_data* vdata = NULL;
             if (inst->GetSendData(&vdata))
             {
@@ -405,7 +428,7 @@ int CWSClientWrapper::cbProc(void* _inst, int reason, void *in, size_t len)
                     memset(out, 0, len);
                     memcpy(out + LWS_SEND_BUFFER_PRE_PADDING, vdata->buffer, vdata->size);
                     int n = lws_write((lws*)inst->GetWsi(), (unsigned char*)out + LWS_SEND_BUFFER_PRE_PADDING, vdata->size, LWS_WRITE_TEXT);
-                    inst->Log.v("lws_write ret=%d\n", n);
+                    inst->Log.v("lws_write ret=%d", n);
                     free(vdata->buffer);
                     free(vdata);
                     free(out);
@@ -428,6 +451,7 @@ int CWSClientWrapper::cbProc(void* _inst, int reason, void *in, size_t len)
             char buffer[1024 + LWS_PRE];
             char *px = buffer + LWS_PRE;
             int lenx = sizeof(buffer) - LWS_PRE;
+            if(!inst->m_pWsi)return -2;
             if (lws_http_client_read(inst->m_pWsi, &px, &lenx) < 0)
                 return -1;
         }
@@ -436,6 +460,7 @@ int CWSClientWrapper::cbProc(void* _inst, int reason, void *in, size_t len)
         case LWS_CALLBACK_CLIENT_ESTABLISHED:
         case LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP:// LWS_CALLBACK_COMPLETED_CLIENT_HTTP:
         {
+            if(!inst->m_pWsi)break;
             lws_callback_on_writable(inst->m_pWsi);
             inst->AddEvent(WEBSOCKWRAP_CONNECT, NULL, 0);
             inst->m_bConnected = 1;
@@ -448,12 +473,14 @@ int CWSClientWrapper::cbProc(void* _inst, int reason, void *in, size_t len)
         {
             inst->AddEvent(WEBSOCKWRAP_DISCONNECT, NULL, 0);
             inst->m_bConnected = 0;
-            lws_cancel_service(lws_get_context(inst->m_pWsi));
+            if(inst->m_pWsi)
+                lws_cancel_service(lws_get_context(inst->m_pWsi));
+            inst->m_pWsi = NULL;
             break;
         }
         default:
             //inst->AddEvent(WEBSOCKWRAP_LWS_OTHER, NULL, 0);
-            //inst->Log.v("WEBSOCKWRAP_LWS_OTHER reason = %d\n", reason);
+            //inst->Log.v("WEBSOCKWRAP_LWS_OTHER reason = %d", reason);
             break;
     }
     return 1;
@@ -467,7 +494,7 @@ int CWSClientWrapper::GetEvent(event_data** vdata)
     {
         *vdata = *it;
         m_Events.erase(it);
-        Log.v("GetEvent %d, size=%d\n", (*vdata)->reason, m_Events.size());
+        Log.v("GetEvent %d, size=%d", (*vdata)->reason, m_Events.size());
         return 1;
     }
     return 0;
@@ -497,7 +524,7 @@ int CWSClientWrapper::AddEvent(WEBSOCKWRAP_EVENT reason, void* in, int len)
 
     m_Events.push_back(vdata);
 
-    Log.v("AddEvent %d, size=%d\n", reason, m_Events.size());
+    Log.v("AddEvent %d, size=%d", reason, m_Events.size());
 
     return 1;
 }
@@ -546,7 +573,7 @@ int CWSClientWrapper::AddSendData(const char* in, int len)
 
     if (m_SendData.size() >= m_nMaxSendDataSize)
     {
-        Log.v("AddSendData failed, m_nMaxSendDataSize=%d reached\n", m_nMaxSendDataSize);
+        Log.v("AddSendData failed, m_nMaxSendDataSize=%d reached", m_nMaxSendDataSize);
         return 0;
     }
 
@@ -558,7 +585,7 @@ int CWSClientWrapper::AddSendData(const char* in, int len)
         memcpy(vdata->buffer, in, len);
         vdata->size = len;
         m_SendData.push_back(vdata);
-        //Log.v("AddSendData %s\n", in);
+        //Log.v("AddSendData %s", in);
         return 1;
     }
     return 0;
@@ -603,11 +630,11 @@ int CWSClientWrapper::WriteBack(const char *str, size_t size_in)
 
     if (!isConnected())
     {
-        Log.v("WriteBack failed, not connected\n", str);
+        Log.v("WriteBack failed, not connected", str);
         return 0;
     }
 
-    Log.v("WriteBack %s\n", str);
+    Log.v("WriteBack %s", str);
 
     int len = 0;
     if (size_in < 1)
@@ -630,7 +657,7 @@ int CWSClientWrapper::WriteBack(const char *str, size_t size_in)
             break;
     }
 
-    Log.v("WriteBack ret=%d\n", m_nSendRetCode);
+    Log.v("WriteBack ret=%d", m_nSendRetCode);
 
     int ret = m_nSendRetCode;
     m_nSendRetCode = 0;
