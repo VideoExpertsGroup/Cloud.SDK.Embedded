@@ -28,7 +28,14 @@ if [ ! -d "build_libwebsockets" ]; then
 fi
 cd build_libwebsockets
 if [ ! -f "Makefile" ]; then
-    cmake -DLWS_WITH_SSL=0 -DLWS_WITHOUT_TESTAPPS=1 -DLWS_WITHOUT_SERVER=1 -DLWS_WITHOUT_TEST_SERVER=1 -DLWS_WITHOUT_TEST_SERVER_EXTPOLL=1 -DLWS_WITHOUT_TEST_PING=1 -DLWS_WITHOUT_TEST_CLIENT=1 ../../external_libs/libwebsockets/src
+    cmake	-DLWS_WITH_SSL=0 \
+		-DLWS_WITHOUT_TESTAPPS=1 \
+		-DLWS_WITHOUT_SERVER=1 \
+		-DLWS_WITHOUT_TEST_SERVER=1 \
+		-DLWS_WITHOUT_TEST_SERVER_EXTPOLL=1 \
+		-DLWS_WITHOUT_TEST_PING=1 \
+		-DLWS_WITHOUT_TEST_CLIENT=1 \
+		../../external_libs/libwebsockets/src
 fi
 make
 echo "<=build libwebsockets lib"
@@ -40,19 +47,24 @@ if [ ! -d "build_cloudsdk" ]; then
 fi
 cd build_cloudsdk
 if [ ! -f "Makefile" ]; then
-    cmake -DJANSSON_BUILD_DIR=$HOME/build_jansson -DLIBWEBSOCKETS_BUILD_DIR=$HOME/build_libwebsockets ../../src
+    cmake	-DJANSSON_BUILD_DIR=$HOME/build_jansson \
+		-DLIBWEBSOCKETS_BUILD_DIR=$HOME/build_libwebsockets \
+		../../src
 fi
 make
 echo "<=build cloudsdk lib"
 
 cd $HOME
-echo "=>build test_cloudstreamer app"
+echo "=>build test app"
 if [ ! -d "build_test" ]; then
     mkdir build_test
 fi
 cd build_test
 if [ ! -f "Makefile" ]; then
-    cmake -DJANSSON_BUILD_DIR=$HOME/build_jansson -DLIBWEBSOCKETS_BUILD_DIR=$HOME/build_libwebsockets -DCLOUDSDK_BUILD_DIR=$HOME/build_cloudsdk ../../test
+    cmake  -DFLAG_USE_UBUNTU=1 \
+	   -DJANSSON_BUILD_DIR=$HOME/build_jansson \
+	   -DLIBWEBSOCKETS_BUILD_DIR=$HOME/build_libwebsockets \
+	   -DCLOUDSDK_BUILD_DIR=$HOME/build_cloudsdk ../../test
 fi
 make
-echo "<=build test_cloudstreamer app"
+echo "<=build test app"

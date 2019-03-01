@@ -68,6 +68,7 @@ CameraManager::CameraManager()
 	misCamRegistered = false;
 	calling_thread_id = 0;
 	m_nCamTZ = 0;
+	mByeReason = "";
 }
 
 CameraManager::~CameraManager()
@@ -159,7 +160,7 @@ void CameraManager::onDisconnected()
 void CameraManager::onReceive(std::string data)
 {
 //	Log.i("=>onReceive Receive message: %s", data.c_str());
-	Log.i("=>onReceive");
+//	Log.i("=>onReceive");
 
 	json_error_t  err;
 	json_t * jdata = json_loads(data.c_str(), 0, &err);
@@ -261,7 +262,7 @@ void CameraManager::onReceive(std::string data)
 	json_decref(jdata);
 
 //	Log.i("<=onReceive Receive message: %s", data.c_str());
-	Log.i("<=onReceive");
+//	Log.i("<=onReceive");
 
 }
 

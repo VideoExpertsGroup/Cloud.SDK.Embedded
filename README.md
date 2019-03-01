@@ -31,6 +31,7 @@ https://dashboard.videoexpertsgroup.com/docs/#CameraRefCode/
  $ cd build.linux   
  $ ./build.sh   
  - RPi  
+ $ sudo apt-get install libcap-dev 
  $ cd build.rpi  
  $ ./build.sh   
  - Windows   

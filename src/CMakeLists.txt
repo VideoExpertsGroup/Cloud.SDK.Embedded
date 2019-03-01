@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 2.8)
 set(JANSSON_BUILD_DIR        lib CACHE PATH "Jansson build directory")
 set(LIBWEBSOCKETS_BUILD_DIR  lib CACHE PATH "Libwebsockets build directory")
 
-option(HIKVISION_BUILD "Build for HIKVISION" OFF) 
-
 message(${JANSSON_BUILD_DIR})
 message(${LIBWEBSOCKETS_BUILD_DIR})
 
@@ -14,11 +12,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 #set (CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Os")
 set (CMAKE_CXX_FLAGS "-fPIC -Os -Wno-psabi -Wconversion-null")
-
-
-if(HIKVISION_BUILD)
-    target_compile_definitions(cloudsdk PUBLIC HIKVISION_BUILD=1)
-endif()
 
 
 include_directories(${JANSSON_BUILD_DIR}/include

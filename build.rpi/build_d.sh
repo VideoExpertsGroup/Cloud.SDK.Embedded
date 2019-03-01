@@ -16,11 +16,10 @@ if [ ! -d "build_jansson" ]; then
 fi
 cd build_jansson
 if [ ! -f "Makefile" ]; then
-    cmake ../../external_libs/jansson-2.11
+    cmake -DCMAKE_BUILD_TYPE=Debug ../../external_libs/jansson-2.11
 fi
 make
 echo "<=build jansson lib"
-
 
 cd $HOME
 echo "=>build libwebsockets lib"
@@ -29,11 +28,18 @@ if [ ! -d "build_libwebsockets" ]; then
 fi
 cd build_libwebsockets
 if [ ! -f "Makefile" ]; then
-    cmake -DCMAKE_C_FLAGS="-fPIC" -DLWS_WITH_SSL=0 -DLWS_WITHOUT_TESTAPPS=1 -DLWS_WITHOUT_SERVER=1 -DLWS_WITHOUT_TEST_SERVER=1 -DLWS_WITHOUT_TEST_SERVER_EXTPOLL=1 -DLWS_WITHOUT_TEST_PING=1 -DLWS_WITHOUT_TEST_CLIENT=1 ../../external_libs/libwebsockets/src
+    cmake	-DLWS_WITH_SSL=0 \
+		-DLWS_WITHOUT_TESTAPPS=1 \
+		-DLWS_WITHOUT_SERVER=1 \
+		-DLWS_WITHOUT_TEST_SERVER=1 \
+		-DLWS_WITHOUT_TEST_SERVER_EXTPOLL=1 \
+		-DLWS_WITHOUT_TEST_PING=1 \
+		-DLWS_WITHOUT_TEST_CLIENT=1 \
+		-DCMAKE_BUILD_TYPE=Debug \
+		../../external_libs/libwebsockets/src
 fi
 make
 echo "<=build libwebsockets lib"
-
 
 cd $HOME
 echo "=>build cloudsdk lib"
@@ -42,14 +48,16 @@ if [ ! -d "build_cloudsdk" ]; then
 fi
 cd build_cloudsdk
 if [ ! -f "Makefile" ]; then
-    cmake -DJANSSON_BUILD_DIR=$HOME/build_jansson -DLIBWEBSOCKETS_BUILD_DIR=$HOME/build_libwebsockets ../../src
+    cmake	-DJANSSON_BUILD_DIR=$HOME/build_jansson \
+		-DLIBWEBSOCKETS_BUILD_DIR=$HOME/build_libwebsockets \
+		-DCMAKE_BUILD_TYPE=Debug \
+		../../src
 fi
 make
 echo "<=build cloudsdk lib"
 
-
 cd $HOME
-echo "=>build_test app"
+echo "=>build test app"
 if [ ! -d "build_test" ]; then
     mkdir build_test
 fi
@@ -58,7 +66,8 @@ if [ ! -f "Makefile" ]; then
     cmake  -DFLAG_USE_UBUNTU=1 \
 	   -DJANSSON_BUILD_DIR=$HOME/build_jansson \
 	   -DLIBWEBSOCKETS_BUILD_DIR=$HOME/build_libwebsockets \
+	   -DCMAKE_BUILD_TYPE=Debug \
 	   -DCLOUDSDK_BUILD_DIR=$HOME/build_cloudsdk ../../test
 fi
-make --trace
-echo "<=build_test app"
+make
+echo "<=build test app"
