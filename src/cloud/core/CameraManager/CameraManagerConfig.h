@@ -45,6 +45,7 @@ class CameraManagerConfig : public CUnk {
 	string PROTOCOL;
 	string DEFAULT_ADDRESS;
 	string mAddress;
+	string mOvrVersion;
 	int PORT;
 
 	string mReconnectAddress;
@@ -55,17 +56,18 @@ public:
 			mStreamConfig->Release();
 	};
 
-	CameraManagerConfig() 
-		: Log("CameraManagerConfig", 2) 
+	CameraManagerConfig()
+		: Log("CameraManagerConfig", 2)
 	{
 		mCameraIPAddress = "127.0.0.1";//CameraManagerHelper.getLocalIpAddress();
 		mCameraBrand = "Camera Brand";//Build.BRAND;
 		mCameraModel = "Camera Model"; //Build.MODEL;
 		mCameraSerialNumber = "Camera Serial"; //Build.SERIAL;
-		mCameraVersion = "3"; //"1" in CloudDK.Android
+		mCameraVersion = "3_101"; //"1" in CloudDK.Android
 		mCMVersion = "Camera CM";
 		mCameraVendor = "vendor";
 		mCameraTimezone = "UTC";//TimeZone.getDefault().getID();
+		mOvrVersion = "";
 
 //		TAG = "CameraManagerConfig";
 //		LOG_LEVEL = 2;
@@ -84,11 +86,11 @@ public:
 		mCameraStreaming = true;
 		mCameraStatusLed = false;
 		mCameraIPAddress = "";
-		mCMVersion = "";
+//		mCMVersion = "";
 		mCameraBrand = "";
 		mCameraModel = "";
 		mCameraSerialNumber = "";
-		mCameraVersion = "";
+//		mCameraVersion = "";
 		mCameraTimezone = "";
 		mCameraVendor = "";
 		mStreamConfig = NULL;
@@ -98,6 +100,8 @@ public:
 		mAddress = DEFAULT_ADDRESS;
 		PORT = 8888;
 		mReconnectAddress = "";
+
+		Log.d("CameraManagerConfig constructor mReconnectAddress empty");
 
 		configureStreamConfig();
 	}
@@ -127,6 +131,7 @@ public:
 		mCameraVersion = src.mCameraVersion;
 		mCameraTimezone = src.mCameraTimezone;
 		mCameraVendor = src.mCameraVendor;
+		mOvrVersion = src.mOvrVersion;
 
 		if (mStreamConfig)
 			mStreamConfig->Release();
@@ -143,6 +148,11 @@ public:
 
 		mReconnectAddress = src.mReconnectAddress;
 
+		if(mReconnectAddress.empty())
+			Log.d("&operator= mReconnectAddress empty");
+		else
+			Log.d("&operator= mReconnectAddress=%s" , mReconnectAddress.c_str());
+
 		return *this;
 	}
 
@@ -158,7 +168,25 @@ public:
             //PORT = atoi(uri.Port.c_str());
             PORT = 8888;
         }
+
+	if(url.empty())
+		Log.d("setCMURL url empty");
+	else
+		Log.d("setCMURL url=%s", url.c_str());
+
     }
+
+	void setVersionOverride(string ver)
+	{
+		if (!ver.empty()) {
+			mOvrVersion = ver;
+		}
+	}
+
+	string getVersionOverride()
+	{
+		return mOvrVersion;
+	}
 
 	void setCMAddress(string url) {
 		if (url.empty()) {
@@ -167,9 +195,21 @@ public:
 		else {
 			mAddress = url;
 		}
+
+		if(mAddress.empty())
+			Log.d("setCMAddress mAddress empty");
+		else
+			Log.d("setCMAddress mAddress=%s", mAddress.c_str());
+
 	}
 
 	string getCMAddress() {
+
+		if(mAddress.empty())
+			Log.d("getCMAddress mAddress empty");
+		else
+			Log.d("getCMAddress mAddress=%s", mAddress.c_str());
+
 		return mAddress;
 	}
 
@@ -245,6 +285,12 @@ public:
 
 	void setReconnectAddress(string val) {
 		mReconnectAddress = val;
+
+		if(mReconnectAddress.empty())
+			Log.d("setReconnectAddress mReconnectAddress empty");
+		else
+			Log.d("setReconnectAddress mReconnectAddress=%s" , mReconnectAddress.c_str());
+
 	}
 	void setRegToken(CloudRegToken &regToken) {
 		mRegToken = regToken;
@@ -259,11 +305,13 @@ public:
 	}*/
 
 	string getAddress() {
-		Log.v("getAddress isEmpty=%d" , mRegToken.isEmpty());
+		Log.d("getAddress isEmpty=%d" , mRegToken.isEmpty());
 
 		string uri;
 		string address = mReconnectAddress.empty() ? mAddress : mReconnectAddress;
 		bool noPort = (address.find(":") == string::npos);
+
+		Log.d("getAddress address = %s" , address.c_str());
 
 		if (!mRegToken.isEmpty()) {
 			uri = PROTOCOL + address + (noPort ? ":" + fto_string(PORT) : "") + "/ctl/NEW/" + mRegToken.getToken() + "/";
@@ -275,8 +323,8 @@ public:
 			Log.e("getAddress, error");
 		}
 
-		Log.v("getAddress %s" ,uri.c_str());
-		
+		Log.d("getAddress %s" ,uri.c_str());
+
 		return uri;
 	}
 

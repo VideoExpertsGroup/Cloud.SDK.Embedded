@@ -13,6 +13,8 @@ public:
 	int Init(const char *filename, int maxFileSizeInBytes=65535, int maxFileIndex = 10);
 	int Write(const char *str, int len);
 	int GetData(unsigned char** ppData, unsigned int* pSize);
+	std::string GetCurrentFileName() { return m_strCurrentFilename; }
+	bool m_bInited;
 
 private:
 	int GetStoredIndex();
@@ -28,7 +30,6 @@ private:
 	int m_nCurFileIndex;
 	std::string m_strIdxFile;
 	std::string m_strCurrentFilename;
-	bool m_bInited;
 	CCritSec m_csLock;
 
 };

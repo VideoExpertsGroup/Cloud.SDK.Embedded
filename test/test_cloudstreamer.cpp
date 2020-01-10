@@ -103,19 +103,23 @@ public:
 
 		streamPushStart(url_push);
 	}
+
 	void onStopped()                
 	{
 		Log.v("=onStopped");
 		streamPushStop();
 	}
+
 	void onError(int error)
 	{
 		Log.v("=onError %d", error);
 	}
+
 	void onCameraConnected() 
 	{
 		Log.v("=onCameraConnected");
 	}
+
 	void onCommand(std::string cmd)
 	{
 		Log.v("=onCommand cmd=%s", cmd.c_str());
@@ -125,10 +129,94 @@ public:
 	{
 		return 0;
 	}
+
 	void onUploadUrl(void* inst, std::string url, int refid)
 	{
 	}
+
 	void onCamGetLog(std::string url)
+	{
+	}
+
+	time_t onGetCloudTime()
+	{
+		return 0;
+	}
+
+	void onSetRecByEventsMode(bool bEventsMode)
+	{
+	}
+
+	void setStreamConfig(CameraManagerConfig &config)
+	{
+	}
+
+	void onCommand(std::string data, std::string &retVal)
+	{
+	}
+
+	void setHttpUser(std::string name, std::string password)
+	{
+	}
+
+	void SetLogEnable(bool bEnable)
+	{
+	}
+
+	void SetImageParams(image_params_t* img)
+	{
+	}
+
+	void GetImageParams(image_params_t* img)
+	{
+	}
+
+	void SetMotionParams(motion_params_t* mpr)
+	{
+	}
+
+	void GetMotionParams(motion_params_t* mpr)
+	{
+	}
+
+	void GetTimeZone(char* time_zone_str)
+	{
+	}
+
+	void SetTimeZone(const char* time_zone_str)
+	{
+	}
+
+	void GetPTZParams(ptz_caps_t* ptz)
+	{
+	}
+
+	void GetAudioParams(audio_settings_t* audset)
+	{
+	}
+
+	void SetAudioParams(audio_settings_t* audset)
+	{
+	}
+
+	void SendPTZCommand(ptz_command_t* ptz)
+	{
+	}
+
+	void GetOSDParams(osd_settings_t* osd)
+	{
+	}
+
+	void SetOSDParams(osd_settings_t* osd)
+	{
+	}
+
+	int SendCameraCommand(cam_command_t* ccmd)
+	{
+		return 0;
+	}
+
+	void TriggerEvent(void* inst, string evt, string meta)
 	{
 	}
 
@@ -281,15 +369,18 @@ int main(int argc, char **argv)
 		strcpy(file_path_dav, gszPath);
 		strcat(file_path_dav, "data.cfg");
 
+		int file_len = 0;
 		config_file_fd = open(file_path_dav, 0, 0666);//fopen(file_path_dav, "rb");
-		if(!config_file_fd)
+		if(config_file_fd < 0)
 		{
 			Log.e("config_file_fd open \"%s\" failed - [%s]\n", file_path_dav, strerror(errno));
 			file_ok = 0;
 		}
-
-		int file_len = lseek(config_file_fd, 0, SEEK_END);
-		lseek(config_file_fd, 0, SEEK_SET);
+		else
+		{
+			file_len = lseek(config_file_fd, 0, SEEK_END);
+			lseek(config_file_fd, 0, SEEK_SET);
+		}
 
 		//fprintf(stderr,"config_file_fd=%d, file_len=%d\n", config_file_fd, file_len);
 
@@ -311,9 +402,9 @@ int main(int argc, char **argv)
 			{
 				Log.v("config_buf=%s, file_len=%d, read_len=%d\n", config_buf, file_len, read_len);
 			}
+			close(config_file_fd);
 		}
 
-		close(config_file_fd);
 
 		if(!file_ok)
 		{

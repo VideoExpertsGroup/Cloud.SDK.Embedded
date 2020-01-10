@@ -40,6 +40,8 @@ namespace CameraManagerCommands {
 	const char * GET_AUDIO_DETECTION = "get_audio_detection";
 	const char * SET_AUDIO_DETECTION = "set_audio_detection";
 	const char * GET_PTZ_CONF = "get_ptz_conf";
+	const char * CAM_PTZ_CONF = "cam_ptz_conf";
+	const char * CAM_PTZ = "cam_ptz";
 
 	const char * RAW_MESSAGE = "raw_message";
 
@@ -50,6 +52,10 @@ namespace CameraManagerCommands {
 	//<=upload segments
 
 	const char * CAM_GET_LOG = "cam_get_log";
-
+	const char * GET_OSD_CONF = "get_osd_conf";
+	const char * SET_OSD_CONF = "set_osd_conf";
+	const char * OSD_CONF = "osd_conf";
+	const char * SET_CAM_PARAMETER = "set_cam_parameter";
+	const char * CAM_TRIGGER_EVENT = "cam_trigger_event";
 }
 #endif //__CAMERAMANAGERCOMMANDS_H__

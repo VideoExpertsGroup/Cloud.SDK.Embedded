@@ -12,11 +12,28 @@ public:
 	virtual void onUpdateConfig(CameraManagerConfig &config) = 0;
 	virtual void onStreamStart() = 0;
 	virtual void onStreamStop() = 0;
-	virtual void onCommand(std::string cmd) = 0;
+	virtual void onCommand(std::string cmd, std::string &retVal) = 0;
 	virtual void onUpdatePreview() = 0;
 	virtual int  onRawMessage(std::string& data) = 0;
 	virtual void onRecvUploadUrl(std::string url, int refid) = 0;
 	virtual void onGetLog(std::string url) = 0;
+	virtual time_t GetCloudTime() = 0;
+	virtual void onSetByEventMode(bool bMode) = 0;
+	virtual void onSetImageParams(image_params_t*) = 0;
+	virtual void onGetImageParams(image_params_t*) = 0;
+	virtual void onSetMotionParams(motion_params_t* mpr) = 0;
+	virtual void onGetMotionParams(motion_params_t* mpr) = 0;
+	virtual void onSetTimeZone(const char* str) = 0;
+	virtual void onGetTimeZone(char* str) = 0;
+	virtual void onGetPTZParams(ptz_caps_t* ptz) = 0;
+	virtual void onSendPTZCommand(ptz_command_t* ptz) = 0;
+	virtual int onSendCameraCommand(cam_command_t* ccmd) = 0;
+	virtual void onGetOSDParams(osd_settings_t* osd) = 0;
+	virtual void onSetOSDParams(osd_settings_t* osd) = 0;
+	virtual void onGetAudioParams(audio_settings_t* audset) = 0;
+	virtual void onSetAudioParams(audio_settings_t* audset) = 0;
+	virtual void onSetLogEnable(bool bEnable) = 0;
+	virtual void onTriggerEvent(string evt, string meta) = 0;
 };
 
 #endif //__ICAMERAMANAGERWEBSOCKETCALLBACK_H__

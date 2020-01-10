@@ -6,7 +6,7 @@
 #include "../../../utils/_cunk.h"
 #include "../../../utils/MLog.h"
 
-#include <vector>
+#include <map>
 #include <jansson.h>
 
 #include "StreamConfigVideo.h"
@@ -22,11 +22,11 @@ class StreamConfig : public CUnk
 
 	string VIDEO;
 	string AUDIO;
-
-	vector<StreamConfigVideo> video_streams;
-	vector<StreamConfigAudio> audio_streams;
-
 public:
+	std::map<std::string, StreamConfigVideo> video_streams;
+	std::map<std::string, StreamConfigAudio> audio_streams;
+
+
 	StreamConfig() : Log("StreamConfig", 2) {VIDEO = "video";AUDIO = "audio";};
 	virtual ~StreamConfig() {};
 
@@ -41,10 +41,13 @@ public:
 		json_t *video = json_object_get(root, VIDEO.c_str());
 		if (json_is_array(video)) {
 			size_t i = 0;
-			json_t *value;
+			const json_t *value;
 			json_array_foreach(video, i, value) {
-				StreamConfigVideo scv(json_string_value(value));
-				video_streams.push_back(scv);
+				if (json_is_object(value)) {
+					std::string videoConfig = json_dumps(value, 0);
+					StreamConfigVideo scv(videoConfig);
+					video_streams[scv.getStream()] = scv;
+				}
 			}
 		}
 
@@ -52,38 +55,23 @@ public:
 		if (json_is_array(audio)) {
 			size_t i = 0;
 			json_t *value;
-			json_array_foreach(video, i, value) {
-				StreamConfigAudio scv(json_string_value(value));
-				audio_streams.push_back(scv);
+			json_array_foreach(audio, i, value) {
+				if (json_is_object(value)) {
+					std::string audioConfig = json_dumps(value, 0);
+					StreamConfigAudio sca(audioConfig);
+					audio_streams[sca.getStream()] = sca;
+				}
 			}
 		}
 		json_decref(root);
 	}
 
 	void addVideoStreamConfig(StreamConfigVideo &vconf) {
-		bool bExists = false;
-		for (size_t i = 0; i < video_streams.size(); i++) {
-			StreamConfigVideo tmpVConf = video_streams[i];
-			if (tmpVConf.getStream() == vconf.getStream()) {
-				bExists = true;
-			}
-		}
-		if (!bExists) {
-			video_streams.push_back(vconf);
-		}
+		video_streams[vconf.getStream()] = vconf;
 	}
 
 	void addAudioStreamConfig(StreamConfigAudio &aconf) {
-		bool bExists = false;
-		for (size_t i = 0; i < audio_streams.size(); i++) {
-			StreamConfigAudio tmpAConf = audio_streams[i];
-			if (tmpAConf.getStream() == aconf.getStream()) {
-				bExists = true;
-			}
-		}
-		if (!bExists) {
-			audio_streams.push_back(aconf);
-		}
+		audio_streams[aconf.getStream()] = aconf;
 	}
 
 	string toJSONObject() {
@@ -93,8 +81,9 @@ public:
 
 		//video
 		json_t *video = json_array();
-		for (size_t i = 0; i < video_streams.size(); i++) {
-			json_t *t=json_loads(video_streams[i].toJSONObject().c_str(), 0, &err);
+		for (std::map<std::string, StreamConfigVideo>::iterator it = video_streams.begin();
+				it != video_streams.end(); ++it) {
+			json_t *t = json_loads(it->second.toJSONObject().c_str(), 0, &err);
 			json_array_append(video, t);
 			json_decref(t);
 		}
@@ -102,8 +91,9 @@ public:
 
 		//audio
 		json_t *audio = json_array();
-		for (size_t i = 0; i < audio_streams.size(); i++) {
-			json_t *t = json_loads(audio_streams[i].toJSONObject().c_str(), 0, &err);
+		for (std::map<std::string, StreamConfigAudio>::iterator it = audio_streams.begin();
+				it != audio_streams.end(); ++it) {
+			json_t *t = json_loads(it->second.toJSONObject().c_str(), 0, &err);
 			json_array_append(audio, t);
 			json_decref(t);
 		}
@@ -118,6 +108,18 @@ public:
 		return ret;
 	}
 
+	StreamConfig& GetStreamConfigByName(std::string name) {
 
+	}
+
+	bool operator==(StreamConfig& rvalue)
+	{
+		return !(toJSONObject().compare(rvalue.toJSONObject()));
+	}
+
+	bool operator!=(StreamConfig& rvalue)
+	{
+		return !(*this == rvalue);
+	}
 };
 #endif //__STREAMCONFIG_H__

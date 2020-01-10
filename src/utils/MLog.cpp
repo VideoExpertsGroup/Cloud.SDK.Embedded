@@ -9,6 +9,7 @@
 
 #ifdef WIN32
 #include <windows.h>
+#include <timeapi.h>
 #else
 #include <sys/types.h>
 #include <unistd.h>
@@ -25,15 +26,23 @@
 #include <stdio.h>
 #endif //_DEBUG
 
-
-//#define SHOW_THREADS
+#ifdef _DEBUG
+#define SHOW_THREADS
+#endif
 
 #define MAX_DBG_LEN 8*1024
 //#define MAX_DBG_LEN 128*1024
 //#define OUTPUT_DBG_STRING
 #define OUTPUT_PRINTF
 
-#define MAX_LOG_SIZE	(64*1024)
+//#undef HUGE_LOG
+
+#ifdef HUGE_LOG
+	#define MAX_LOG_SIZE	(1024*1024*1024)
+	#define SHOW_THREADS
+#else
+	#define MAX_LOG_SIZE	(64*1024)
+#endif
 
 LogLevel MLog::globalLevel = LOGLEVEL_ASSERT;
 bool MLog::isSignedWithDebugKey = false;
@@ -64,7 +73,8 @@ void MLog::_init(int level, const char * filename)
 	if (pLogIdx != NULL)
 		nMaxLogFileIdx = atoi(pLogIdx);
 
-	m_fr.Init(filename, nMaxLogFileSize, nMaxLogFileIdx);
+	if(!m_fr.m_bInited)
+		m_fr.Init(filename, nMaxLogFileSize, nMaxLogFileIdx);
 
 }
 
@@ -122,9 +132,12 @@ void MLog::dbg(int level, const char *tag, const char * str, va_list vl)
 #ifdef SHOW_THREADS
 	unsigned int t = get_timedelta();
 	DWORD dwThread = GetCurrentThreadId();
-	snprintf(buf_prt, MAX_DBG_LEN, "%.8d:%.3d %02d:%02d:%02d [0x%8.8X] %s %s\n", t / 1000, t % 1000, pt->tm_hour, pt->tm_min, pt->tm_sec, dwThread, tag, buf_arg);
+    if(strlen(tag))
+	    snprintf(buf_prt, MAX_DBG_LEN, "%.8d:%.3d %02d.%02d-%02d:%02d:%02d.%.03d [0x%8.8X] %s %s\n", t / 1000, t % 1000, pt->tm_mday, pt->tm_mon+1, pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec(), dwThread, tag, buf_arg);
+    else
+        snprintf(buf_prt, MAX_DBG_LEN, "%.8d:%.3d %02d.%02d-%02d:%02d:%02d.%.03d [0x%8.8X] %s\n", t / 1000, t % 1000, pt->tm_mday, pt->tm_mon + 1, pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec(), dwThread, buf_arg);
 #else
-	snprintf(buf_prt, MAX_DBG_LEN, "%02d:%02d:%02d.%.03d %s %s\n", pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec() , tag, buf_arg);
+	snprintf(buf_prt, MAX_DBG_LEN, "%02d.%02d-%02d:%02d:%02d.%.03d %s %s\n", pt->tm_mday, pt->tm_mon+1, pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec() , tag, buf_arg);
 #endif
 
 
@@ -148,4 +161,7 @@ int MLog::GetLogData(unsigned char** pData, unsigned int* nSize)
 	return 	m_fr.GetData(pData, nSize);
 }
 
-
+std::string MLog::GetCurrentFileName()
+{
+	return m_fr.GetCurrentFileName();
+}

@@ -58,10 +58,10 @@ public:
 		mShareToken = "";
 		mCMAddress = "";
 
-		Log.v("=>CloudAPI this=%p", this);
+		Log.d("=>CloudAPI this=%p", this);
 	}
 	virtual ~CloudAPI() {
-		Log.v("<=CloudAPI this=%p", this);
+		Log.d("<=CloudAPI this=%p", this);
 	}
 
     void setHost(std::string host){

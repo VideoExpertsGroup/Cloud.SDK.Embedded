@@ -7,13 +7,12 @@
 struct CameraEvent
 {
 	std::string event; //"motion", "sound", "record", etc
-//	std::string timeUTC; //UTC
-	unsigned long timeUTC;// 
-	std::string status; //optional
-	std::string error_description; //optional
-	int snapshot_size;
+	unsigned long timeUTC;
+	std::string status;
+	int data_size;
 	int snapshot_width;
 	int snapshot_height;
+	std::string meta;
 
 	void set_time(long ltime)
 	{

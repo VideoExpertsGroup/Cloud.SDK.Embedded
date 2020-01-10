@@ -34,6 +34,7 @@ public:
 	MLog(std::string &tag, int level, const char * filename);
 
 	int GetLogData(unsigned char** pData, unsigned int* nSize);
+	std::string GetCurrentFileName();
 
 	void v(const char *fmt, ...) {
 		va_list vl;
@@ -83,7 +84,7 @@ public:
 	void ff(const char *fmt, ...) {
 		va_list vl;
 		va_start(vl, fmt);
-		dbg(level, "", fmt, vl);
+		dbg(level, "-", fmt, vl);
 		va_end(vl);
 	}
 

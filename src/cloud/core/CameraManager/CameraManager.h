@@ -33,6 +33,11 @@ class CameraManager : public CUnk
 	DWORD calling_thread_id;
 	
 	int m_nCamTZ;
+	bool closed;
+
+	bool m_bHelloDone;
+
+	long long mPubSID;
 
 public:
 	MLog Log;
@@ -43,14 +48,28 @@ public:
 	int Open(CameraManagerConfig &config, ICameraManagerCallback *callback);
 	int Close();
 	int send_cam_event(const CameraEvent &camEvent);
+	int get_direct_upload_url(unsigned long timeUTC, const char* type, const char* category, int size, int duration);
+	int CloudPing();
+	time_t CloudPong();
 
 	std::string getCameraConfig() { return mCameraConfig; };
-	std::string getStreamUrl() { return mStreamUrl; };
+	std::string getStreamUrl()
+	{
+		return mStreamUrl; 
+	};
 
 	int confirm_direct_upload(std::string url);
 
 	int set_cam_tz(int tz);
 	int get_cam_tz();
+
+	void setPublishSID(long long val) {
+		mPubSID = val;
+	}
+
+	long long getPublishSID() {
+		return mPubSID;
+	}
 
 private:
 	int Reconnect();
@@ -67,6 +86,7 @@ private:
 	int send_cmd_register();	   //send on first websocket connect
 	int send_cmd_cam_register();   //send on HELLO cmd
 	int send_cmd_done(long long cmd_id, std::string cmd, std::string status);
+	int send_cmd_bye();
 	//<=send
 
 	//=>recv
@@ -94,6 +114,12 @@ private:
 	int recv_cmd_SET_MOTION_DETECTION(std::string data);
 	int recv_cmd_SET_STREAM_CONFIG(std::string data);
 	int recv_cmd_GET_PTZ_CONF(std::string data);
+	int recv_cmd_CAM_PTZ(std::string data);
+	int recv_cmd_CAM_COMMAND(std::string data);
+	int recv_cmd_GET_OSD_CONF(std::string data);
+	int recv_cmd_SET_OSD_CONF(std::string data);
+	int recv_cmd_SET_CAM_PARAMETER(std::string data);
+	int recv_cmd_CAM_TRIGGER_EVENT(std::string data);
 
 	int recv_cmd_RAW_MESSAGE(std::string data);
 

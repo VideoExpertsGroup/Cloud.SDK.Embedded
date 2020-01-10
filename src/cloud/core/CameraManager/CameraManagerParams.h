@@ -10,6 +10,7 @@ namespace CameraManagerParams {
 	const char * SID = "sid";
 	const char * CA = "ca";
 	const char * CAM_ID = "cam_id";
+	const char * PUB_SID = "publish_session_id";
 	const char * REFID = "refid";
 	const char * CMD = "cmd";
 	const char * ORIG_CMD = "orig_cmd";
@@ -52,6 +53,12 @@ namespace CameraManagerParams {
 	const char * SPKR = "spkr";
 	const char * BACKWARD = "backward";
 	const char * STREAM_ID = "stream_id";
+	const char * MIC_GAIN = "mic_gain";
+	const char * MIC_MUTE = "mic_mute";
+	const char * SPKR_VOL = "spkr_vol";
+	const char * SPKR_MUTE = "spkr_mute";
+	const char * ECHO_CANCEL = "echo_cancel";
+	const char * BACKWARD_FMTS = "backward_formats";
 	const char * TZ = "tz";
 	const char * VENDOR = "vendor";
 	const char * VER = "ver";
@@ -88,5 +95,8 @@ namespace CameraManagerParams {
 	const char * RAW_MESSAGING = "raw_messaging";
 	const char * RAW_MESSAGE = "message";
 	const char * ERROR_DESCRIPTION = "error_description";
+	const char * RETRY = "retry";
+	const char * TRIGGER = "trigger";
+	const char * META = "meta";
 }
 #endif //__CAMERAMANAGERPARAMS_H__

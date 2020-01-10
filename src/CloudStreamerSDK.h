@@ -27,7 +27,7 @@ class CloudStreamerSDK : public CUnk,
 	std::string mToken;
 	long long mCamid;
 	std::string mSvcpUrl;
-	
+
 	void* snap_handler;
 
 	//streamer CM
@@ -46,6 +46,10 @@ public:
 	int Stop();
 
 	int sendCamEvent(const CameraEvent &camEvent);
+	int GetDirectUploadUrl(unsigned long timeUTC, const char* type, const char* category, int size, int duration);
+	int CloudPing();
+	time_t CloudPong();
+	void* GetCallbackClassPtr();
 
 	//=>ICameraManagerCallback
 	void onPrepared();
@@ -53,7 +57,7 @@ public:
 	void onUpdateConfig(CameraManagerConfig &config);
 	void onStreamStart();
 	void onStreamStop();
-	void onCommand(std::string cmd);
+	void onCommand(std::string cmd, std::string& retVal);
 	void onUpdatePreview();
 	int  onRawMessage(std::string& data);
 	int  ConfirmUpload(std::string url);
@@ -63,8 +67,25 @@ public:
 	void onGetLog(std::string url);
 	int SetCamTimeZone(int tz);
 	int GetCamTimeZone();
+	time_t GetCloudTime();
+	void onSetByEventMode(bool bMode);
+	void onSetImageParams(image_params_t*);
+	void onGetImageParams(image_params_t*);
+	void onSetMotionParams(motion_params_t* mpr);
+	void onGetMotionParams(motion_params_t* mpr);
+	void onSetTimeZone(const char* time_zone_str);
+	void onGetTimeZone(char* time_zone_str);
+	void onGetPTZParams(ptz_caps_t* ptz);
+	void onSendPTZCommand(ptz_command_t* ptz);
+	int onSendCameraCommand(cam_command_t* ccmd);
+	void onGetOSDParams(osd_settings_t* osd);
+	void onSetOSDParams(osd_settings_t* osd);
+	void onGetAudioParams(audio_settings_t* audset);
+	void onSetAudioParams(audio_settings_t* audset);
+	void onSetLogEnable(bool bEnable);
+	void setVersionOverride(string ver);
+	void onTriggerEvent(string evt, string meta);
 	//<=ICameraManagerCallback
 };
 
 #endif //__CLOUDSTREAMERSDK_H__
-

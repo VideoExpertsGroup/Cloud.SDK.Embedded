@@ -6,7 +6,7 @@
 #include "utils/Context.h"
 #include "utils/MLog.h"
 
-#define CLOUDSDK_LIB_VERSION "2.0.75_20190213"
+#define CLOUDSDK_LIB_VERSION "2.0.101_20200106"
 
 class CloudSDK
 {
@@ -26,7 +26,7 @@ public:
 		MLog::setLogEnable(b);
 		if (b) {
 			MLog Log("CloudSDK", 2, filename);
-			Log.v("CLOUDSDK_LIB_VERSION=%s", CLOUDSDK_LIB_VERSION);
+			Log.d("CLOUDSDK_LIB_VERSION=%s", CLOUDSDK_LIB_VERSION);
 		}
 	}
 	static bool getLogEnable() {

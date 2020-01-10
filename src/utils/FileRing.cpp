@@ -21,6 +21,8 @@
 #define _lseek lseek
 #endif
 
+//#undef HUGE_LOG
+
 #include "FileRing.h"
 
 #define FLG_ACCESS ( S_IREAD | S_IWRITE )
@@ -109,10 +111,15 @@ int CFileRing::Init(const char *filename, int maxFileSizeInBytes, int maxFileInd
 		return 0;
 	}
 
-	m_strBaseFileName = filename;
+	if (filename)
+		m_strBaseFileName = filename;
+
 	m_nMaxFileSize = maxFileSizeInBytes;
 	m_nMaxFileIndex = maxFileIndex;
-	m_nFile = 0;
+
+	if (m_nFile >= 0)
+		close(m_nFile);
+	m_nFile = -1;
 
 	if(m_strBaseFileName.empty())
 		return -1;
@@ -126,9 +133,14 @@ int CFileRing::Init(const char *filename, int maxFileSizeInBytes, int maxFileInd
 	else
 		strcpy(szPath,"./");
 
+#ifdef HUGE_LOG
+	m_strIdxFile = "";
+	m_nMaxFileIndex = 0;
+#else
 	m_strIdxFile = szPath;
 	m_strIdxFile += "logindex.txt";
 	m_nCurFileIndex = GetStoredIndex();
+#endif
 
 	if(m_nCurFileIndex>m_nMaxFileIndex)
 		m_nCurFileIndex=0;
@@ -143,9 +155,9 @@ int CFileRing::Init(const char *filename, int maxFileSizeInBytes, int maxFileInd
 CFileRing::~CFileRing()
 {
 	SetStoredIndex(m_nCurFileIndex);
-	if(m_nFile)
+	if(m_nFile>=0)
 		_close(m_nFile);
-	m_nFile = 0;
+	m_nFile = -1;
 }
 
 int CFileRing::Write(const char *str, int len)
@@ -153,35 +165,31 @@ int CFileRing::Write(const char *str, int len)
 
 	CAutoLock lock(&m_csLock);
 
-	if(m_nFile<=0)
+	if(m_nFile<0)
 	{
 		m_nFile = _open(m_strCurrentFilename.c_str(), FLG_MODE_ALL, FLG_ACCESS);
-		_lseek(m_nFile, 0, SEEK_END);
+		if(m_nFile >= 0)
+			_lseek(m_nFile, 0, SEEK_END);
 	}
 
-	if(m_nFile<=0)
+	if(m_nFile<0)
 		return -1;
 
 	if(m_strBaseFileName.empty())
 		return 0;
 
-//	int len = strlen(str);
 	int file_size = GetCurFileSize();
 
 //	printf("file=%s, len=%d, file_size=%d, m_nMaxFileSize=%d\n", m_strCurrentFilename.c_str(), len, file_size, m_nMaxFileSize);
 
 	if (file_size + len >= m_nMaxFileSize)
 	{
-//		printf(">\n");
-
 		int to_write = m_nMaxFileSize - file_size;
 		if (to_write > 0)
 		{
 			_lseek(m_nFile, 0, SEEK_END);
 			int x = _write(m_nFile, str, to_write);
-
 //			printf("file=%s, len=%d, file_size=%d, m_nMaxFileSize=%d, to_write=%d, file_size2=%d, x=%d\n", m_strCurrentFilename.c_str(), len, file_size, m_nMaxFileSize, to_write, GetCurFileSize(), x);
-
 			len -= to_write;
 			str += to_write;
 		}
@@ -191,10 +199,12 @@ int CFileRing::Write(const char *str, int len)
 		}
 
 		SwitchToNextFile();
+
+		if (m_nFile < 0)
+			return 0;
 	}
 
 	_lseek(m_nFile, 0, SEEK_END);
-//	printf("GetCurFileSize()=%d\n", GetCurFileSize());
 	int z = _write(m_nFile, str, len);
 //	printf("len=%d, z=%d, GetCurFileSize()=%d\n", len, z, GetCurFileSize());
 	return z;
@@ -205,6 +215,11 @@ char* CFileRing::GetFileNameByIdx(int idx)
 	static char szName[MAX_PATH]={0};
 	if(m_strBaseFileName.empty())
 		return NULL;
+
+#ifdef HUGE_LOG
+	strcpy(szName, m_strBaseFileName.c_str());
+	return szName;
+#endif
 
 	char* pFileName = new char[strlen(m_strBaseFileName.c_str())+1];
 	strcpy(pFileName, m_strBaseFileName.c_str());
@@ -223,7 +238,7 @@ char* CFileRing::GetFileNameByIdx(int idx)
 
 int CFileRing::GetCurFileSize()
 {
-	if(!m_nFile)
+	if(m_nFile<0)
 		return 0;
 
 	CAutoLock lock(&m_csLock);
@@ -239,7 +254,7 @@ int CFileRing::SwitchToNextFile()
 
 	CAutoLock lock(&m_csLock);
 
-	if(m_nFile)
+	if(m_nFile>=0)
 		_close(m_nFile);
 
 	m_nCurFileIndex++;
@@ -256,7 +271,7 @@ int CFileRing::SwitchToNextFile()
 
 	m_nFile = _open(m_strCurrentFilename.c_str(), FLG_MODE_ALL, FLG_ACCESS);
 
-	if(m_nFile<=0)
+	if(m_nFile<0)
 		return -1;
 
 	return 0;

@@ -78,6 +78,8 @@ public:
     int Disconnect();
     int WriteBack(const char *str, size_t size_in=0);
     int isConnected() { return m_bConnected; };
+	int Ping();
+	time_t	m_tLastPongTime;
 
     static int cbProc(void* inst, int reason, void *in, size_t len);
     int m_bDisconnectFlag;
