@@ -115,9 +115,9 @@ int CloudStreamerSDK::sendCamEvent(const CameraEvent &camEvent)
 	return mCameraManager.send_cam_event(camEvent);
 }
 
-int CloudStreamerSDK::GetDirectUploadUrl(unsigned long timeUTC, const char* type, const char* category, int size, int duration)
+int CloudStreamerSDK::GetDirectUploadUrl(unsigned long timeUTC, const char* type, const char* category, int size, int duration, int width, int height)
 {
-	return mCameraManager.get_direct_upload_url(timeUTC, type, category, size, duration);
+	return mCameraManager.get_direct_upload_url(timeUTC, type, category, size, duration, width, height);
 }
 
 int CloudStreamerSDK::CloudPing()

@@ -48,7 +48,7 @@ public:
 	int Open(CameraManagerConfig &config, ICameraManagerCallback *callback);
 	int Close();
 	int send_cam_event(const CameraEvent &camEvent);
-	int get_direct_upload_url(unsigned long timeUTC, const char* type, const char* category, int size, int duration);
+	int get_direct_upload_url(unsigned long timeUTC, const char* type, const char* category, int size, int duration, int width=0, int height=0);
 	int CloudPing();
 	time_t CloudPong();
 

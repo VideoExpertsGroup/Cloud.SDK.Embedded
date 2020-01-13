@@ -46,7 +46,7 @@ public:
 	int Stop();
 
 	int sendCamEvent(const CameraEvent &camEvent);
-	int GetDirectUploadUrl(unsigned long timeUTC, const char* type, const char* category, int size, int duration);
+	int GetDirectUploadUrl(unsigned long timeUTC, const char* type, const char* category, int size, int duration, int width=0, int height=0);
 	int CloudPing();
 	time_t CloudPong();
 	void* GetCallbackClassPtr();

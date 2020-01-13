@@ -2756,7 +2756,7 @@ int CameraManager::get_cam_tz()
 	return m_nCamTZ;
 }
 
-int CameraManager::get_direct_upload_url(unsigned long timeUTC, const char* type, const char* category, int size, int duration)
+int CameraManager::get_direct_upload_url(unsigned long timeUTC, const char* type, const char* category, int size, int duration, int width, int height)
 {
 	Log.d("%s", __FUNCTION__);
 
@@ -2768,12 +2768,23 @@ int CameraManager::get_direct_upload_url(unsigned long timeUTC, const char* type
 	json_object_set_new(jcmd, CameraManagerParams::CAM_ID, json_integer(mCameraManagerConfig.getCamID()));
 	json_object_set_new(jcmd, "file_time", json_string(GetStringFromTime(timeUTC)));
 	json_object_set_new(jcmd, "size", json_integer(size));
-	json_object_set_new(jcmd, "duration", json_integer(duration));
-	json_object_set_new(jcmd, "stream_id", json_integer(0));
 	json_object_set_new(jcmd, CameraManagerParams::TIME, json_real(timeUTC));
+
+	if (duration)
+	{
+		json_object_set_new(jcmd, "stream_id", json_integer(0));
+		json_object_set_new(jcmd, "duration", json_integer(duration));
+	}
+
+	if(width)
+		json_object_set_new(jcmd, "width", json_integer(width));
+
+	if (height)
+		json_object_set_new(jcmd, "height", json_integer(height));
 
 	if(category)
 		json_object_set_new(jcmd, "category", json_string(category));
+
 	if(type)
 		json_object_set_new(jcmd, "type", json_string(type));
 
