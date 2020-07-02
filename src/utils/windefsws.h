@@ -7,7 +7,6 @@
 #include <errno.h>
 #include <objbase.h>
 #include "windirent.h"
-
 #endif
 
 #include <ctype.h>
@@ -31,6 +30,13 @@ using namespace std;
 #ifndef _WIN32
 #include <sys/time.h>
 //#include <uuid/uuid.h>
+
+#define _open open
+#define _close close
+#define _read read
+#define _write write
+#define _lseek lseek
+
 
 typedef unsigned char  BYTE;
 typedef unsigned int   UINT;
@@ -66,6 +72,9 @@ long	InterlockedDecrement(long *lpAddend);
 void Sleep(unsigned long msec);
 
 int ThreadJoin(pthread_t thread, void **value_ptr);
+
+extern DWORD timeBeginPeriod(DWORD uPeriod);
+extern DWORD timeEndPeriod(DWORD uPeriod);
 
 #define THREADRET void*
 
@@ -181,6 +190,30 @@ void set_max(T& val) { val = std::numeric_limits<T>::max(); }
 template<typename T>
 void set_min(T& val) { val = std::numeric_limits<T>::min(); }
 #endif
+
+#ifndef MAX_PATH
+#ifdef PATH_MAX
+#define MAX_PATH PATH_MAX
+#else
+#define MAX_PATH (4096)
+#endif
+#endif
+
+
+#ifndef MAKEWORD
+#define MAKEWORD(a,b)   ((WORD)(((BYTE)(a))|(((WORD)((BYTE)(b)))<<8)))
+#endif
+
+#ifdef WIN32
+#define FLG_MODE_ALL ( O_RDWR | O_CREAT | O_BINARY )
+#define SLASH_CHAR '\\'
+#else
+#define FLG_MODE_ALL ( O_RDWR | O_CREAT )
+#define SLASH_CHAR '/'
+#endif //WIN32
+
+int MYWritePrivateProfileString(const char* Section, const char* Entery, const char* String, const char* File);
+int MYGetPrivateProfileString(const char* Section, const char* Entery, const char* Default,char* Buffer,int nBuffer, const char* File);
 
 #endif  // defined(__cplusplus)
 

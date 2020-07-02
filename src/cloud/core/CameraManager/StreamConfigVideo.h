@@ -23,7 +23,9 @@ class StreamConfigVideo
     double mFps;
     int mGop;
     int mQuality;
-    string mFormat;
+	int mVbrBrt;
+	int mCbrBrt;
+	string mFormat;
     string mStream;
 
     string HORZ;
@@ -34,6 +36,8 @@ class StreamConfigVideo
     string STREAM;
     string QUALITY;
     string FPS;
+	string CBR_BRT;
+	string VBR_BRT;
 
     void const_init()//for avoid -std=c++11 requirement
     {
@@ -45,15 +49,19 @@ class StreamConfigVideo
         mQuality = 0; // default value
         mFormat = "H.264"; // default value
         mStream = "Vid"; // default value
+		mVbrBrt = 1022;
+		mCbrBrt = 1023;
 
-        HORZ = "horz";
-        VERT = "vert";
-        FORMAT = "format";
-        VBR = "vbr";
-        GOP = "gop";
-        STREAM = "stream";
-        QUALITY = "quality";
-        FPS = "fps";
+        HORZ	= "horz";
+        VERT	= "vert";
+        FORMAT	= "format";
+        VBR		= "vbr";
+        GOP		= "gop";
+        STREAM	= "stream";
+        QUALITY	= "quality";
+        FPS		= "fps";
+		CBR_BRT	= "brt";
+		VBR_BRT	= "vbr_brt";
     }
 
 public:
@@ -91,6 +99,12 @@ public:
 			v = json_object_get(root, GOP.c_str());
 			if (v) mGop = (int)json_integer_value(v);
 
+			v = json_object_get(root, CBR_BRT.c_str());
+			if (v) mCbrBrt = (int)json_integer_value(v);
+
+			v = json_object_get(root, VBR_BRT.c_str());
+			if (v) mVbrBrt = (int)json_integer_value(v);
+
 			json_decref(root);
 		}
 	};
@@ -107,6 +121,8 @@ public:
 		json_object_set(video, FPS.c_str(), json_real(mFps));
 		json_object_set(video, QUALITY.c_str(), json_integer(mQuality));
 		json_object_set(video, GOP.c_str(), json_integer(mGop));
+		json_object_set(video, CBR_BRT.c_str(), json_integer(mCbrBrt));
+		json_object_set(video, VBR_BRT.c_str(), json_integer(mVbrBrt));
 
 		ret = json_dumps(video, 0);
 		json_decref(video);
@@ -176,6 +192,22 @@ public:
 
 	void setStream(string mStream) {
 		this->mStream = mStream;
+	}
+
+	int getCBRbrt() {
+		return mCbrBrt;
+	}
+
+	int getVBRbrt() {
+		return mVbrBrt;
+	}
+
+	void setCBRbrt(int mBrt) {
+		this->mCbrBrt = mBrt;
+	}
+
+	void setVBRbrt(int mBrt) {
+		this->mVbrBrt = mBrt;
 	}
 
 };

@@ -47,6 +47,7 @@ class CameraManagerConfig : public CUnk {
 	string mAddress;
 	string mOvrVersion;
 	int PORT;
+	bool m_bSSL_Disabled;
 
 	string mReconnectAddress;
 
@@ -63,7 +64,10 @@ public:
 		mCameraBrand = "Camera Brand";//Build.BRAND;
 		mCameraModel = "Camera Model"; //Build.MODEL;
 		mCameraSerialNumber = "Camera Serial"; //Build.SERIAL;
-		mCameraVersion = "3_101"; //"1" in CloudDK.Android
+
+		//Do not change mCameraVersion value manually! It overwrites by set_cm_ver.sh to value from the VERSION file.
+		mCameraVersion = "1.0.142";
+
 		mCMVersion = "Camera CM";
 		mCameraVendor = "vendor";
 		mCameraTimezone = "UTC";//TimeZone.getDefault().getID();
@@ -82,23 +86,50 @@ public:
 		mCamID = 0;
 		mRegToken;
 
-		mCameraActivity = false;
+		mCameraActivity = true;
 		mCameraStreaming = true;
 		mCameraStatusLed = false;
 		mCameraIPAddress = "";
-//		mCMVersion = "";
 		mCameraBrand = "";
 		mCameraModel = "";
 		mCameraSerialNumber = "";
-//		mCameraVersion = "";
 		mCameraTimezone = "";
 		mCameraVendor = "";
 		mStreamConfig = NULL;
+		m_bSSL_Disabled = false;
 
+#if (WITH_OPENSSL || WITH_MBEDTLS)
+		PROTOCOL = "wss://";
+		PORT = 8883;
+//check for cert.pem
+		if (!CertFileExist() || SSL_Disabled())
+		{
+			PROTOCOL = "ws://";
+			PORT = 8888;
+		}
+#else
 		PROTOCOL = "ws://";
-		DEFAULT_ADDRESS = "cam.skyvr.videoexpertsgroup.com";
-		mAddress = DEFAULT_ADDRESS;
 		PORT = 8888;
+#endif
+
+		DEFAULT_ADDRESS = "cam.skyvr.videoexpertsgroup.com";
+
+		if (1)
+		{
+			char szEndPoint[512] = { 0 };
+			MYGetPrivateProfileString(
+				"EndPoint",
+				"DefaultCamAddress",
+				"cam.skyvr.videoexpertsgroup.com",
+				szEndPoint,
+				512,
+				GetSettingsFile()
+			);
+			Log.d("%s EndPoint=%s", __FUNCTION__, szEndPoint);
+			DEFAULT_ADDRESS = szEndPoint;
+		}
+
+		mAddress = DEFAULT_ADDRESS;
 		mReconnectAddress = "";
 
 		Log.d("CameraManagerConfig constructor mReconnectAddress empty");
@@ -142,9 +173,13 @@ public:
 		// WS(S) - 8888(8883)
 		// default parameters
 		PROTOCOL = src.PROTOCOL;
+		PORT = src.PORT;
+
+		if (m_bSSL_Disabled)
+			setSSLDisable(true);
+
 		DEFAULT_ADDRESS = src.DEFAULT_ADDRESS;
 		mAddress = src.mAddress;
-		PORT = src.PORT;
 
 		mReconnectAddress = src.mReconnectAddress;
 
@@ -191,9 +226,11 @@ public:
 	void setCMAddress(string url) {
 		if (url.empty()) {
 			mAddress = DEFAULT_ADDRESS;
+			Log.d("setCMAddress DEFAULT_ADDRESS=%s", DEFAULT_ADDRESS.c_str());
 		}
 		else {
 			mAddress = url;
+			Log.d("setCMAddress url=%s", url.c_str());
 		}
 
 		if(mAddress.empty())
@@ -405,6 +442,32 @@ public:
 		return mStreamConfig;
 	}
 
+	void setSSLDisable(bool disable)
+	{
+		Log.d("WEBSOCKWRAP_ERROR dbg3");
+
+		if (!CertFileExist() || SSL_Disabled())
+			return;
+
+#if (WITH_OPENSSL || WITH_MBEDTLS)
+
+		m_bSSL_Disabled = disable;
+
+		if (disable)
+		{
+			Log.d("WEBSOCKWRAP_ERROR dbg4");
+			PROTOCOL = "ws://";
+			PORT = 8888;
+		}
+		else
+		{
+			Log.d("WEBSOCKWRAP_ERROR dbg5");
+			PROTOCOL = "wss://";
+			PORT = 8883;
+		}
+#endif
+	}
+
 private:
 	void configureStreamConfig() {
 		mStreamConfig = new StreamConfig();
@@ -419,6 +482,8 @@ private:
 		videoStreamConfig.setQuality(0);
 		videoStreamConfig.setGop(60);
 		videoStreamConfig.setFps(30.0);
+		videoStreamConfig.setCBRbrt(1024);
+		videoStreamConfig.setVBRbrt(1024);
 		mStreamConfig->addVideoStreamConfig(videoStreamConfig);
 
 		// Audio stream config

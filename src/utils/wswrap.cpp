@@ -11,15 +11,11 @@
 //#pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "Crypt32.lib")
 #pragma comment(lib, "kernel32.lib")
+#pragma comment(lib, "Cryptui.lib")
 #endif //_WIN32
 
 
-#ifdef _WIN32
-DWORD WINAPI EventsThread(LPVOID pParam);
-#else
-void* EventsThread(LPVOID pParam);
-#endif
-
+THREADRET EventsThread(LPVOID pParam);
 
 static int ws_callback(lws *wsi, lws_callback_reasons reason, void *user, void *in, size_t len)
 {
@@ -43,12 +39,13 @@ static int ws_callback(lws *wsi, lws_callback_reasons reason, void *user, void *
 }
 
 CWSClientWrapper::CWSClientWrapper(WSWRAP_CB_PROC OnEvent, void *userData)
-	:Log("CWSClientWrapper", 2)
+	//:Log("CWSClientWrapper", 2)
+    :Log("", 2)
 {
     m_OnEvent = OnEvent;
 	m_UserData = userData;
 
-	Log.d("=>CWSClientWrapper");
+    Log.d("=>%s", __FUNCTION__);
     m_bDisconnectFlag  = 0;
     m_bConnected    = 0;
     m_hPendingThread= (HANDLE)NULL;
@@ -61,11 +58,14 @@ CWSClientWrapper::CWSClientWrapper(WSWRAP_CB_PROC OnEvent, void *userData)
     m_nSendRetCode = 0;
     m_bDestroyFlag = 0;
 	m_tLastPongTime = 0;
+    m_bConnected = 0;
+    m_pContext = NULL;
+
+    //lws_set_log_level(LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE | LLL_DEBUG, NULL);
 
 #ifdef _DEBUG
-    //lws_set_log_level(LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE | LLL_DEBUG, NULL);
     //lws_set_log_level(LLL_ERR | LLL_WARN, NULL);
-    lws_set_log_level(0, NULL);
+    //lws_set_log_level(0, NULL);
 #else
     lws_set_log_level(LLL_ERR | LLL_WARN, NULL);
 #endif
@@ -74,9 +74,9 @@ CWSClientWrapper::CWSClientWrapper(WSWRAP_CB_PROC OnEvent, void *userData)
     X509 *x509 = NULL;
     X509_STORE *store = X509_STORE_new();
     m_pCertContext = NULL;
-    m_hCertStore = CertOpenSystemStore(NULL, L"ROOT");
+    m_hCertStore = CertOpenSystemStore(NULL, "ROOT");
 
-    //logprintf(DEBUG_LEVEL_DEBUG, "m_hCertStore = 0x%X\n", m_hCertStore);
+    Log.d("m_hCertStore = 0x%X\n", m_hCertStore);
 
     if (!m_hCertStore)
         return;
@@ -86,11 +86,12 @@ CWSClientWrapper::CWSClientWrapper(WSWRAP_CB_PROC OnEvent, void *userData)
         //uncomment the line below if you want to see the certificates as pop ups
         //CryptUIDlgViewContext(CERT_STORE_CERTIFICATE_CONTEXT, m_pCertContext,   NULL, NULL, 0, NULL);
         x509 = NULL;
-        x509 = d2i_X509(NULL, (const unsigned char **)&m_pCertContext->pbCertEncoded, m_pCertContext->cbCertEncoded);
+        const unsigned char* encoded_cert = m_pCertContext->pbCertEncoded;
+        x509 = d2i_X509(nullptr, &encoded_cert, m_pCertContext->cbCertEncoded);
         if (x509)
         {
             int i = X509_STORE_add_cert(store, x509);
-            //if (i == 1)logprintf(DEBUG_LEVEL_DEBUG, "certificate added\n");
+            if (i == 1)Log.d("certificate added\n");
             X509_free(x509);
         }
     }
@@ -104,11 +105,11 @@ CWSClientWrapper::CWSClientWrapper(WSWRAP_CB_PROC OnEvent, void *userData)
 CWSClientWrapper::~CWSClientWrapper()
 {
 
-    Log.d("=>CWSClientWrapper");
+    Log.d("=>%s", __FUNCTION__);
 
     Disconnect();
 
-Log.d("%s", __FUNCTION__);
+    Log.d("%s", __FUNCTION__);
 
 #ifdef USE_WINDOWS_CERT_STORE
     if(m_pCertContext)
@@ -134,13 +135,13 @@ Log.d("%s", __FUNCTION__);
         m_hEventsThread = (HANDLE)NULL;
     }
 
-	Log.d("<=CWSClientWrapper");
+    Log.d("<=%s", __FUNCTION__);
 }
 
 int CWSClientWrapper::Disconnect()
 {
     //logprintf(DEBUG_LEVEL_DEBUG, "Disconnect\n");
-	Log.d("=>Disconnect");
+    Log.d("=>%s", __FUNCTION__);
 
 	if (!m_bConnected && !m_pContext)
 	{
@@ -169,7 +170,6 @@ int CWSClientWrapper::Disconnect()
     }
 
 Log.d("Disconnect 1");
-
     if (m_pContext)
     {
 Log.d("Disconnect 2");
@@ -197,18 +197,14 @@ Log.d("Disconnect 7");
     m_bConnected = 0;
     m_pContext = NULL;
 
-    Log.d("<=Disconnect");
+    Log.d("<=%s", __FUNCTION__);
     return 0;
 }
 
-#ifdef _WIN32
-DWORD WINAPI EventsThread(LPVOID pParam)
-#else
-void* EventsThread(LPVOID pParam)
-#endif
+THREADRET EventsThread(LPVOID pParam)
 {
     CWSClientWrapper* pWrapper = (CWSClientWrapper*)pParam;
-    pWrapper->Log.d("=>EventsThread");
+    pWrapper->Log.d("=>%s", __FUNCTION__);
 
     while (!pWrapper->m_bDestroyFlag)
     {
@@ -223,11 +219,9 @@ void* EventsThread(LPVOID pParam)
 //                pWrapper->Log.d("<=evCb");
             }
 
-            if (vdata->buffer)
-                free(vdata->buffer);
-            if (vdata)
-                free(vdata);
-
+            if(vdata)
+                SAFE_FREE(vdata->buffer);
+            SAFE_FREE(vdata);
         }
         else
         {
@@ -235,18 +229,13 @@ void* EventsThread(LPVOID pParam)
         }
     }
     pWrapper->m_hEventsThread = (HANDLE)NULL;
-    pWrapper->Log.d("<=EventsThread");
+    pWrapper->Log.d("<=%s", __FUNCTION__);
 	pthread_exit(NULL);
     return 0;
 }
 
-#ifdef _WIN32
-DWORD WINAPI PendingThread(LPVOID pParam)
-#else
-void* PendingThread(LPVOID pParam)
-#endif
+THREADRET PendingThread(LPVOID pParam)
 {
-    //logprintf(DEBUG_LEVEL_DEBUG, "PendingThread started\n");
     CWSClientWrapper* pWrapper = (CWSClientWrapper*)pParam;
 	pWrapper->Log.d("=>PendingThread %d",pWrapper->m_bDisconnectFlag);
 
@@ -273,7 +262,7 @@ void* PendingThread(LPVOID pParam)
 	pWrapper->Log.d("pWrapper->GetWsi()=%p", pWrapper->GetWsi());
 
     pWrapper->m_hPendingThread = (HANDLE)NULL;
-	pWrapper->Log.d("<=PendingThread");
+	pWrapper->Log.d("<=%s", __FUNCTION__);
 	pthread_exit(NULL);
     return 0;
 }
@@ -282,6 +271,10 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
 {
 
 	CAutoLock lock(&m_csProcLock);
+
+    Disconnect();
+
+    Log.d("=>%s", __FUNCTION__);
 
     const char* proto = NULL;
     const char* addr = NULL;
@@ -309,7 +302,7 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
     else
         strcpy(m_szProto, "http");
 
-    int use_ssl = LCCSCF_USE_SSL | LCCSCF_ALLOW_SELFSIGNED;
+    int use_ssl = LCCSCF_USE_SSL | LCCSCF_ALLOW_SELFSIGNED | LCCSCF_SKIP_SERVER_CERT_HOSTNAME_CHECK | LCCSCF_ALLOW_EXPIRED;// | LCCSCF_ALLOW_INSECURE;
     if (!strcmp(proto, "http") || !strcmp(proto, "ws"))
         use_ssl = 0;
 	Log.d("use_ssl=%d", use_ssl);
@@ -321,27 +314,33 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
     memset(&m_CreateInfo, 0, sizeof m_CreateInfo);
     m_CreateInfo.port = CONTEXT_PORT_NO_LISTEN;
     m_CreateInfo.protocols = m_Protocols;
-	 m_CreateInfo.ka_time				= 3;
-	 m_CreateInfo.ka_probes				= 3;
-	 m_CreateInfo.ka_interval 			= 1;
-	 m_CreateInfo.keepalive_timeout	= 30;
+    m_CreateInfo.ka_time				= 3;
+    m_CreateInfo.ka_probes				= 3;
+    m_CreateInfo.ka_interval 			= 1;
+    m_CreateInfo.keepalive_timeout	= 30;
 
-    
 //    m_CreateInfo.gid = -1;
 //    m_CreateInfo.uid = -1;
     if (use_ssl)
     {
+        const char* cert_name = "cert.pem";
+        const char* app_path = GetProgramPath();
+        char* cert_path=new char[strlen(app_path)+strlen(cert_name)+16];
+        sprintf(cert_path, "%s%s", app_path, cert_name);
+        Log.d("cert_path=%s", cert_path);
+
         m_CreateInfo.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
-        m_CreateInfo.ssl_cert_filepath = cert_path;
-        m_CreateInfo.ssl_private_key_filepath = key_path;
+        //m_CreateInfo.ssl_cert_filepath = "/etc/ssl/certs/Amazon_Root_CA_1.pem";// "./AmazonRootCA1.pem"; //cert_path;
+        //m_CreateInfo.ssl_cert_filepath = "./AmazonRootCA1.pem";
+        //m_CreateInfo.ssl_ca_filepath = "./AmazonRootCA1.pem";
+        m_CreateInfo.ssl_private_key_filepath =  key_path;
+        m_CreateInfo.client_ssl_ca_filepath = cert_path;// "./cert.pem";// "./AmazonRootCA1.pem";
     }
-    //m_CreateInfo.max_http_header_pool = 20;
-    //m_CreateInfo.user = this;
 
     if(pending_timeout_ms > 0)
         m_nPendingTimeout = pending_timeout_ms;
     else
-        m_nPendingTimeout = 100;
+        m_nPendingTimeout = 500;
 
 	Log.d("Connect");
     memset(&m_ClientInfo, 0, sizeof(m_ClientInfo));
@@ -350,7 +349,7 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
     if (m_pContext == NULL)
     {
 		Log.d("Context is NULL");
-        if (szUrl)free(szUrl);
+        SAFE_FREE(szUrl);
         return -1;
     }
 
@@ -383,33 +382,40 @@ int CWSClientWrapper::Connect(const char* url, const char* method, int pending_t
     if (path)strcpy(szPath + 1, path);
     m_ClientInfo.path = szPath;
 
+    Log.d("Connect  szPath=%s", szPath);
+
     m_ClientInfo.pwsi = &m_pWsi;
     m_ClientInfo.userdata = this;
 
-	 struct lws *cwsi;
+	struct lws *cwsi;
+
+    if(m_CreateInfo.ssl_cert_filepath)
+        Log.d("ssl_cert_filepath=%s", m_CreateInfo.ssl_cert_filepath);
 
     cwsi = lws_client_connect_via_info(&m_ClientInfo);
 
-	 Log.d("lws_client_connect_via_info  %x : %x" , cwsi, m_pWsi); 
-	 
+    Log.d("lws_client_connect_via_info  %x : %x" , cwsi, m_pWsi); 
+
     if (m_pWsi == NULL || cwsi == NULL)
     {
-		Log.d("Wsi create error");
-        if (szUrl)free(szUrl);
-        if (szPath)free(szPath);
+        Log.d("Wsi create error");
+        SAFE_FREE(szUrl);
+        SAFE_FREE(szPath);
         return -1;
     }
 
-	Log.d("Wsi create success 0x%X" , m_pWsi);
+    Log.d("Wsi create success 0x%X" , m_pWsi);
+
+    SAFE_FREE(szPath);
+    SAFE_FREE(szUrl);
+    m_ClientInfo.path = NULL;
 
     m_bDisconnectFlag = 0;
     DWORD dwThreadId = 0;
     m_hPendingThread = CreateThread(0, 0, PendingThread, this, 0, &dwThreadId);
 
-    if (szUrl)free(szUrl);
-    if (szPath)free(szPath);
-
     m_bConnected = 1;
+    m_tLastPongTime = time(NULL);
 
 //  lws_set_log_level(LLL_DEBUG, NULL);
 
@@ -437,9 +443,12 @@ int CWSClientWrapper::cbProc(void* _inst, int reason, void *in, size_t len)
         }
         case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
         {
-            inst->AddEvent(WEBSOCKWRAP_ERROR, NULL, 0);	
-            if(inst->m_pWsi)
-                lws_cancel_service(lws_get_context(inst->m_pWsi));
+            inst->AddEvent(WEBSOCKWRAP_ERROR, in, len);
+            if (inst->m_pContext)
+            {
+                inst->Log.d("%s lws_cancel_service", __FUNCTION__);
+                lws_cancel_service(inst->m_pContext);
+            }
             inst->m_pWsi = NULL;
             inst->m_bConnected = 0;
             inst->Log.d("LWS_CALLBACK_CLIENT_CONNECTION_ERROR - %s", (char*)in);
@@ -470,13 +479,13 @@ int CWSClientWrapper::cbProc(void* _inst, int reason, void *in, size_t len)
 						memset(out, 0, len);
 						memcpy(out + LWS_SEND_BUFFER_PRE_PADDING, vdata->buffer, vdata->size);
 						n = lws_write((lws*)inst->GetWsi(), (unsigned char*)out + LWS_SEND_BUFFER_PRE_PADDING, vdata->size, LWS_WRITE_TEXT);
-						inst->Log.d("lws_write ret=%d", n);
+						inst->Log.v("lws_write ret=%d", n);
 						free(out);
 					}
-					free(vdata->buffer);
-					free(vdata);
                     inst->m_nSendRetCode = n;
                 }
+                SAFE_FREE(vdata->buffer);
+                SAFE_FREE(vdata);
             }
             break;
         }
@@ -530,6 +539,12 @@ int CWSClientWrapper::cbProc(void* _inst, int reason, void *in, size_t len)
 			inst->Log.d("LWS_CALLBACK_CLIENT_RECEIVE_PONG, len=%d", len);
 			inst->m_tLastPongTime = time(NULL);
 		}
+
+        case LWS_CALLBACK_OPENSSL_LOAD_EXTRA_CLIENT_VERIFY_CERTS:
+        {
+            inst->Log.v("LWS_CALLBACK_OPENSSL_LOAD_EXTRA_CLIENT_VERIFY_CERTS");
+            return 0;
+        }
 
         default:
             //inst->AddEvent(WEBSOCKWRAP_LWS_OTHER, NULL, 0);
@@ -598,9 +613,10 @@ int CWSClientWrapper::PurgeEvents()
     {
         std::vector<event_data*>::iterator it = m_Events.begin();
         event_data* vdata = *it;
-        if (vdata->buffer)
-            free(vdata->buffer);
-        free(vdata);
+
+        if (vdata)
+            SAFE_FREE(vdata->buffer);
+        SAFE_FREE(vdata);
         m_Events.erase(it);
 
     }
@@ -660,9 +676,9 @@ int CWSClientWrapper::PurgeSendData()
     {
         vector<send_data*>::iterator it = m_SendData.begin();
         send_data* vdata = *it;
-        if (vdata->buffer)
-            free(vdata->buffer);
-        free(vdata);
+        if (vdata)
+            SAFE_FREE(vdata->buffer);
+        SAFE_FREE(vdata);
         m_SendData.erase(it);
 
     }
@@ -673,6 +689,8 @@ int CWSClientWrapper::WriteBack(const char *str, size_t size_in)
 {
     if (!str)
         return -1;
+
+    CAutoLock autoLock(&m_WriteBackLock);
 
     int nTimeToWait = 10000;
     int nSleepPeriod = 100;
@@ -713,7 +731,7 @@ int CWSClientWrapper::WriteBack(const char *str, size_t size_in)
             break;
     }
 
-    Log.d("WriteBack ret=%d", m_nSendRetCode);
+    Log.v("WriteBack ret=%d", m_nSendRetCode);
 
     int ret = m_nSendRetCode;
     m_nSendRetCode = 0;

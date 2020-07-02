@@ -4,12 +4,20 @@ project(cloudsdk)
 
 set(JANSSON_BUILD_DIR        lib CACHE PATH "Jansson build directory")
 set(LIBWEBSOCKETS_BUILD_DIR  lib CACHE PATH "Libwebsockets build directory")
+set(OPENSSL_BUILD_DIR        lib CACHE PATH "openssl build directory")
+set(MBEDTLS_BUILD_DIR        lib CACHE PATH "mbedtls build directory")
 
 option(HUGE_LOG "Huge log file" OFF)
 option(OLDCPP "Old cpp version, less than cpp11" OFF)
+option(WITH_OPENSSL "build with openssl library" OFF)
+option(WITH_MBEDTLS "build with openssl library" OFF)
+option(DISABLE_RTMPS "Disable rtmps protocol" OFF)
+
 
 message(${JANSSON_BUILD_DIR})
 message(${LIBWEBSOCKETS_BUILD_DIR})
+message(${OPENSSL_BUILD_DIR})
+message(${MBEDTLS_BUILD_DIR})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
@@ -23,7 +31,8 @@ if (CMAKE_HOST_WIN32)
 	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
 else()
 	if(OLDCPP)
-		set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+#		set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+		set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -fPIC -O2")
 	else()
 		set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fPIC -O2 -Wno-psabi")
 	endif()
@@ -33,6 +42,20 @@ endif()
 include_directories(${JANSSON_BUILD_DIR}/include
                     ${LIBWEBSOCKETS_BUILD_DIR}/include
 )
+
+if (WITH_MBEDTLS)
+	include_directories(${JANSSON_BUILD_DIR}/include
+                            ${LIBWEBSOCKETS_BUILD_DIR}/include
+                            ${MBEDTLS_BUILD_DIR}/include
+)
+endif()
+
+if(WITH_OPENSSL)
+	include_directories(${JANSSON_BUILD_DIR}/include
+                            ${LIBWEBSOCKETS_BUILD_DIR}/include
+	                    ${OPENSSL_BUILD_DIR}/include
+)
+endif()
 
 find_library(
               jansson
@@ -107,6 +130,18 @@ endif()
 
 if(OLDCPP)
     target_compile_definitions(cloudsdk PUBLIC OLDCPP=1)
+endif()
+
+if(WITH_OPENSSL)
+    target_compile_definitions(cloudsdk PUBLIC WITH_OPENSSL=1)
+endif()
+
+if (WITH_MBEDTLS)
+    target_compile_definitions(cloudsdk PUBLIC WITH_MBEDTLS=1)
+endif()
+
+if (DISABLE_RTMPS)
+    target_compile_definitions(cloudsdk PUBLIC DISABLE_RTMPS=1)
 endif()
 
 if (CMAKE_HOST_WIN32)

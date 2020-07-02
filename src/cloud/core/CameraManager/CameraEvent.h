@@ -45,7 +45,6 @@ struct CameraEvent
 				printf("set_time1 (%s) \n",date_time);
 				
 			   struct tm ti={0};
-			   int d1,d2;
 		      if(sscanf(date_time, "%d-%d-%dT%d:%d:%d", &ti.tm_year, &ti.tm_mon, &ti.tm_mday ,&ti.tm_hour , &ti.tm_min, &ti.tm_sec ) != 6)
 		      {
 		      	timeUTC = time(NULL);

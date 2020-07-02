@@ -21,6 +21,8 @@ class CloudStreamerSDK : public CUnk,
 	ICloudStreamerCallback *mCallback;
 	long m_RefConnected;
 
+	bool m_bStarted;
+
 	CloudShareConnection mConnection;
 
 	//camera info
@@ -58,7 +60,7 @@ public:
 	void onStreamStart();
 	void onStreamStop();
 	void onCommand(std::string cmd, std::string& retVal);
-	void onUpdatePreview();
+	void onUpdatePreview(std::string url);
 	int  onRawMessage(std::string& data);
 	int  ConfirmUpload(std::string url);
 	void onRecvUploadUrl(std::string url, int refid);
@@ -83,8 +85,16 @@ public:
 	void onGetAudioParams(audio_settings_t* audset);
 	void onSetAudioParams(audio_settings_t* audset);
 	void onSetLogEnable(bool bEnable);
+	void onSetActivity(bool bEnable);
 	void setVersionOverride(string ver);
 	void onTriggerEvent(string evt, string meta);
+	void onStartBackward(string url);
+	void onStopBackward(string url);
+	void onSetPeriodicEvents(const char* name, int period, bool active);
+	void onGetEventLimits(time_t* pre, time_t* post);
+	void onSetEventLimits(time_t pre, time_t post);
+	void onGetWiFiList(wifi_list_t* wifilist);
+	void onSetCurrenWiFi(wifi_params* params);
 	//<=ICameraManagerCallback
 };
 

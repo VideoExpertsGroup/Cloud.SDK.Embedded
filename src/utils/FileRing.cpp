@@ -14,16 +14,12 @@
 #else
 #include <unistd.h>
 #include <linux/limits.h>
-#define _open open
-#define _close close
-#define _read read
-#define _write write
-#define _lseek lseek
 #endif
 
-//#undef HUGE_LOG
-
 #include "FileRing.h"
+#include "utils.h"
+
+bool gbSplitLog = true;
 
 #define FLG_ACCESS ( S_IREAD | S_IWRITE )
 #define FLG_MODE_RD  ( O_RDONLY )
@@ -107,9 +103,7 @@ int CFileRing::Init(const char *filename, int maxFileSizeInBytes, int maxFileInd
 {
 
 	if(maxFileSizeInBytes==m_nMaxFileSize && m_nMaxFileIndex==maxFileIndex)
-	{
 		return 0;
-	}
 
 	if (filename)
 		m_strBaseFileName = filename;
@@ -133,14 +127,19 @@ int CFileRing::Init(const char *filename, int maxFileSizeInBytes, int maxFileInd
 	else
 		strcpy(szPath,"./");
 
-#ifdef HUGE_LOG
-	m_strIdxFile = "";
-	m_nMaxFileIndex = 0;
-#else
-	m_strIdxFile = szPath;
-	m_strIdxFile += "logindex.txt";
-	m_nCurFileIndex = GetStoredIndex();
-#endif
+	gbSplitLog = IsSplitLog();
+
+	if (!gbSplitLog)
+	{
+		m_strIdxFile = "";
+		m_nMaxFileIndex = 0;
+	}
+	else
+	{
+		m_strIdxFile = szPath;
+		m_strIdxFile += "logindex.txt";
+		m_nCurFileIndex = GetStoredIndex();
+	}
 
 	if(m_nCurFileIndex>m_nMaxFileIndex)
 		m_nCurFileIndex=0;
@@ -182,7 +181,7 @@ int CFileRing::Write(const char *str, int len)
 
 //	printf("file=%s, len=%d, file_size=%d, m_nMaxFileSize=%d\n", m_strCurrentFilename.c_str(), len, file_size, m_nMaxFileSize);
 
-	if (file_size + len >= m_nMaxFileSize)
+	if ((file_size + len >= m_nMaxFileSize) && gbSplitLog)
 	{
 		int to_write = m_nMaxFileSize - file_size;
 		if (to_write > 0)
@@ -216,10 +215,11 @@ char* CFileRing::GetFileNameByIdx(int idx)
 	if(m_strBaseFileName.empty())
 		return NULL;
 
-#ifdef HUGE_LOG
-	strcpy(szName, m_strBaseFileName.c_str());
-	return szName;
-#endif
+	if (!gbSplitLog)
+	{
+		strcpy(szName, m_strBaseFileName.c_str());
+		return szName;
+	}
 
 	char* pFileName = new char[strlen(m_strBaseFileName.c_str())+1];
 	strcpy(pFileName, m_strBaseFileName.c_str());

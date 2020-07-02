@@ -13,7 +13,7 @@ public:
 	virtual void onStreamStart() = 0;
 	virtual void onStreamStop() = 0;
 	virtual void onCommand(std::string cmd, std::string &retVal) = 0;
-	virtual void onUpdatePreview() = 0;
+	virtual void onUpdatePreview(std::string url) = 0;
 	virtual int  onRawMessage(std::string& data) = 0;
 	virtual void onRecvUploadUrl(std::string url, int refid) = 0;
 	virtual void onGetLog(std::string url) = 0;
@@ -33,7 +33,15 @@ public:
 	virtual void onGetAudioParams(audio_settings_t* audset) = 0;
 	virtual void onSetAudioParams(audio_settings_t* audset) = 0;
 	virtual void onSetLogEnable(bool bEnable) = 0;
+	virtual void onSetActivity(bool bEnable) = 0;
 	virtual void onTriggerEvent(string evt, string meta) = 0;
+	virtual void onStartBackward(string url) = 0;
+	virtual void onStopBackward(string url) = 0;
+	virtual void onSetPeriodicEvents(const char* name, int period, bool active) = 0;
+	virtual void onGetEventLimits(time_t* pre, time_t* post) = 0;
+	virtual void onSetEventLimits(time_t pre, time_t post) = 0;
+	virtual void onGetWiFiList(wifi_list_t* wifilist) = 0;
+	virtual void onSetCurrenWiFi(wifi_params* params) = 0;
 };
 
 #endif //__ICAMERAMANAGERWEBSOCKETCALLBACK_H__

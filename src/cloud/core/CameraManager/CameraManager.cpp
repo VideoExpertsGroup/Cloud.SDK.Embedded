@@ -11,6 +11,7 @@
 #include "CameraManagerByeReasons.h"
 #include "../../../Enums/CloudReturnCodes.h"
 #include <jansson.h>
+//#include "../../../utils/utils.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -42,7 +43,7 @@ int CameraManager::OnEvent(void* inst, WEBSOCKWRAP_EVENT reason, void *in, size_
 	if (!p)
 		return -1;
 
-	p->Log.d(">=OnEvent");
+	p->Log.d("=>%s", __FUNCTION__);
 
 	switch (reason)
 	{
@@ -71,6 +72,18 @@ int CameraManager::OnEvent(void* inst, WEBSOCKWRAP_EVENT reason, void *in, size_
 		if (p->mCallback) {
 			p->mCallback->onClosed(RET_ERROR_NO_CLOUD_CONNECTION, "");
 		}
+
+		if (p->m_bSSL_Enabled && in && len)
+		{
+			p->Log.d("WEBSOCKWRAP_ERROR SSL dbg1");
+			if (1)//strstr((char*)in, "Timed out waiting SSL"))
+			{
+				p->Log.d("WEBSOCKWRAP_ERROR SLL dbg2");
+				p->m_bSSL_Failed = true;
+				p->mCameraManagerConfig.setSSLDisable(p->m_bSSL_Failed);
+			}
+		}
+
 		p->Log.d("WEBSOCKWRAP_ERROR %x",p->mCallback);
 		break;
 	case WEBSOCKWRAP_LWS_OTHER:
@@ -81,7 +94,7 @@ int CameraManager::OnEvent(void* inst, WEBSOCKWRAP_EVENT reason, void *in, size_
 		break;
 	}
 
-	p->Log.d("<=OnEvent");
+	p->Log.d("<=%s", __FUNCTION__);
 
 
 	return 0;
@@ -89,7 +102,8 @@ int CameraManager::OnEvent(void* inst, WEBSOCKWRAP_EVENT reason, void *in, size_
 
 
 CameraManager::CameraManager()
-	: Log("CameraManager", 2)
+	//: Log("CameraManager", 2)
+	: Log("", 2)
 	  ,mWebSocket(OnEvent, this)
 {
 	messageId = 1;
@@ -103,6 +117,14 @@ CameraManager::CameraManager()
 	mCameraConfig = "";
 	m_bHelloDone = false;
 	mPubSID = -1;
+	m_bSSL_Failed = false;
+	m_bSSL_Enabled = false;
+#if (WITH_OPENSSL || WITH_MBEDTLS)
+	if (CertFileExist() && !SSL_Disabled())
+	{
+		m_bSSL_Enabled = true;
+	}
+#endif
 }
 
 CameraManager::~CameraManager()
@@ -112,7 +134,7 @@ CameraManager::~CameraManager()
 
 int CameraManager::Open(CameraManagerConfig &config, ICameraManagerCallback *callback)
 {
-	Log.d("=>Open");
+	Log.d("=>%s", __FUNCTION__);
 
 	misPrepared = false;
 	misCamRegistered = false;
@@ -126,7 +148,7 @@ int CameraManager::Open(CameraManagerConfig &config, ICameraManagerCallback *cal
 	std::string uri;
 	uri = mCameraManagerConfig.getAddress();
 
-Log.d("Open %s", uri.c_str());
+	Log.d("Open %s", uri.c_str());
 
 	int ret = mWebSocket.Connect(uri.c_str());
 	if (ret < 0) {
@@ -147,7 +169,7 @@ Log.d("Open %s", uri.c_str());
 
 int CameraManager::Reconnect()
 {
-	Log.d("=>Reconnect");
+	Log.d("=>%s", __FUNCTION__);
 
 	std::string uri;
 	uri = mCameraManagerConfig.getAddress();
@@ -178,29 +200,29 @@ Log.d(">>>Reconnect to %s", uri.c_str());
 
 int CameraManager::Close()
 {
-	Log.d("=>Close");
+	Log.d("=>%s", __FUNCTION__);
 
 	closed = true;
 
-	send_cmd_bye();
-	Sleep(100);
-	mWebSocket.Disconnect();
+	if(m_bHelloDone)
+		send_cmd_bye();
+
 	m_bHelloDone = false;
 
-	Log.d("<=Close");
+	Log.d("<=%s", __FUNCTION__);
 	return 0;
 }
 
 
 void CameraManager::onConnected()
 {
-	Log.d("<=onConnected");
+	Log.d("=>%s", __FUNCTION__);
 	send_cmd_register();
 }
 
 void CameraManager::onDisconnected()
 {
-	Log.d("<=onDisconnected %d",misReconnect);
+	Log.d("%s %d", __FUNCTION__, (int)misReconnect);
 	if (misReconnect)
 		return;
 
@@ -210,8 +232,8 @@ void CameraManager::onDisconnected()
 
 void CameraManager::onReceive(std::string data)
 {
-	Log.d("=>onReceive Receive message: %s", data.c_str());
-//	Log.d("=>onReceive");
+
+//	Log.d("=>onReceive Receive message: %s", data.c_str());
 
 	json_error_t  err;
 	json_t * jdata = json_loads(data.c_str(), 0, &err);
@@ -227,6 +249,11 @@ void CameraManager::onReceive(std::string data)
 		json_decref(jdata);
 		return;
 	}
+
+	if (strncmp(scmd, CameraManagerCommands::DIRECT_UPLOAD_URL, strlen(scmd)))//skip too large direct upload url in log
+		Log.d("=>onReceive Receive message: %s", data.c_str());
+	else
+		Log.d("=>onReceive Receive message: DIRECT_UPLOAD_URL");
 
 	if (!strncmp(scmd, CameraManagerCommands::HELLO, strlen(scmd))) {
 		recv_cmd_HELLO(data);
@@ -272,6 +299,9 @@ void CameraManager::onReceive(std::string data)
 	}
 	else if (!strncmp(scmd, CameraManagerCommands::GET_STREAM_BY_EVENT, strlen(scmd))) {
 		recv_cmd_GET_STREAM_BY_EVENT(data);
+	}
+	else if (!strncmp(scmd, CameraManagerCommands::SET_STREAM_BY_EVENT, strlen(scmd))) {
+		recv_cmd_SET_STREAM_BY_EVENT(data);
 	}
 	else if (!strncmp(scmd, CameraManagerCommands::GET_STREAM_CAPS, strlen(scmd))) {
 		recv_cmd_GET_STREAM_CAPS(data);
@@ -321,14 +351,25 @@ void CameraManager::onReceive(std::string data)
 	else if (!strncmp(scmd, CameraManagerCommands::CAM_TRIGGER_EVENT, strlen(scmd))) {
 		recv_cmd_CAM_TRIGGER_EVENT(data);
 	}
+	else if (!strncmp(scmd, CameraManagerCommands::BACKWARD_START, strlen(scmd))) {
+		recv_cmd_BACKWARD_START(data);
+	}
+	else if (!strncmp(scmd, CameraManagerCommands::BACKWARD_STOP, strlen(scmd))) {
+		recv_cmd_BACKWARD_STOP(data);
+	}
+	else if (!strncmp(scmd, CameraManagerCommands::CAM_LIST_WIFI, strlen(scmd))) {
+		recv_cmd_CAM_LIST_WIFI(data);
+	}
+	else if (!strncmp(scmd, CameraManagerCommands::CAM_SET_CURRENT_WIFI, strlen(scmd))) {
+		recv_cmd_CAM_SET_CURRENT_WIFI(data);
+	}
 	else {
 		Log.e("<=onReceive unhandled cmd=%s", scmd);
 	}
 
 	json_decref(jdata);
 
-//	Log.d("<=onReceive Receive message: %s", data.c_str());
-//	Log.d("<=onReceive");
+//Log.d("<=%s", __FUNCTION__);
 
 }
 
@@ -389,8 +430,20 @@ int CameraManager::send_cmd_register()
 		json_object_set_new(jcmd, CameraManagerParams::REG_TOKEN, json_string(mCameraManagerConfig.getRegToken().getToken().c_str()));
 	}
 
+#if (WITH_OPENSSL || WITH_MBEDTLS)
+	if (CertFileExist() && !SSL_Disabled())
+	{
+		json_t* jmedia_prot = json_array();
+		json_array_append_new(jmedia_prot, json_string("rtmp"));
+#ifndef DISABLE_RTMPS
+		if(!m_bSSL_Failed && !RTMPS_Disabled())
+			json_array_append_new(jmedia_prot, json_string("rtmps"));
+#endif
+		json_object_set_new(jcmd, CameraManagerParams::MEDIA_PROTOCOLS, jmedia_prot);
+	}
+#endif
 
-        char* jstr = json_dumps(jcmd, 0);
+	char* jstr = json_dumps(jcmd, 0);
 	scmd = jstr;
 	json_decref(jcmd);
 	free(jstr);
@@ -405,16 +458,16 @@ int CameraManager::send_cmd_bye()
 	Log.d("=>%s", __FUNCTION__);
 
 	json_t *jcmd = json_object();
-	json_object_set_new(jcmd, CameraManagerParams::CMD, json_string(CameraManagerCommands::BYE));
 	json_object_set_new(jcmd, CameraManagerParams::MSGID, json_integer(messageId++));
 	json_object_set_new(jcmd, CameraManagerParams::REASON, json_string(CameraManagerByeReasons::RECONNECT));
+	json_object_set_new(jcmd, CameraManagerParams::CMD, json_string(CameraManagerCommands::BYE));
 
 	char* jstr = json_dumps(jcmd, 0);
 	string scmd = jstr;
 	json_decref(jcmd);
 	free(jstr);
 
-	Log.d("%s %s", __FUNCTION__, scmd.c_str());
+//	Log.d("%s %s", __FUNCTION__, scmd.c_str());
 
 	return mWebSocket.WriteBack(scmd.c_str());
 }
@@ -476,7 +529,7 @@ int CameraManager::send_cmd_done(long long cmd_id, std::string cmd, std::string 
 
 	json_decref(jcmd);
 
-	Log.d("send_cmd_done()=%s", scmd.c_str());
+//	Log.d("send_cmd_done()=%s", scmd.c_str());
 
 	return mWebSocket.WriteBack(scmd.c_str());
 
@@ -484,14 +537,17 @@ int CameraManager::send_cmd_done(long long cmd_id, std::string cmd, std::string 
 
 static char* GetStringFromTime(time_t ttime)
 {
-    struct tm* timeinfo;
-    static char sztime[32];
-    char mstmp[32];
-    timeinfo = gmtime(&ttime);
-    int msec = timeGetTime()%1000;
-    strftime(mstmp, sizeof(mstmp), "%Y%m%dT%H%M%S", timeinfo);
-    sprintf(sztime,"%s.%d",mstmp, msec);
-    return sztime;
+	struct tm* timeinfo;
+	static char sztime[32];
+	char mstmp[32];
+	char smsec[32];
+	timeinfo = gmtime(&ttime);
+	int msec = timeGetTime()%1000;
+	strftime(mstmp, sizeof(mstmp), "%Y%m%dT%H%M%S", timeinfo);
+	sprintf(smsec, "%d", msec);
+	smsec[3] = 0;
+	sprintf(sztime,"%s.%s", mstmp, smsec);
+	return sztime;
 }
 
 int CameraManager::send_cam_event(const CameraEvent &camEvent)
@@ -504,6 +560,12 @@ int CameraManager::send_cam_event(const CameraEvent &camEvent)
 		return -1;
 	}
 
+	if ((camEvent.event == "snapshot") && camEvent.data_size <= 0)
+	{
+		Log.e("%s snapshot error camEvent.data_size=%d", __FUNCTION__, camEvent.data_size);
+		return -1;
+	}
+
 	int idx = messageId;
 	string scmd;
 	json_t *jcmd = json_object();
@@ -512,19 +574,27 @@ int CameraManager::send_cam_event(const CameraEvent &camEvent)
 	json_object_set_new(jcmd, CameraManagerParams::CAM_ID, json_integer(mCameraManagerConfig.getCamID()));
 	json_object_set_new(jcmd, CameraManagerParams::EVENT, json_string(camEvent.event.c_str()));
 
-	if (camEvent.event != "videoloss")
+	if ((camEvent.event != "videoloss"))
 	{
-		json_t *motion_info = json_object();
-		json_object_set(jcmd, "motion_info", motion_info);
 
-		json_t *snapshot_info = json_object();
-		json_object_set_new(snapshot_info, "image_time", json_string(GetStringFromTime(camEvent.timeUTC)));
-		json_object_set_new(snapshot_info, "size", json_integer(camEvent.data_size));
-		json_object_set_new(snapshot_info, "width", json_integer(camEvent.snapshot_width));
-		json_object_set_new(snapshot_info, "height", json_integer(camEvent.snapshot_height));
-		json_object_set(jcmd, "snapshot_info", snapshot_info);
+		json_t* motion_info = json_object();
+		json_object_set(jcmd, "motion_info", motion_info);
 		json_decref(motion_info);
-		json_decref(snapshot_info);
+
+		if (camEvent.data_size > 0)
+		{
+			json_t* snapshot_info = json_object();
+			json_object_set_new(snapshot_info, "image_time", json_string(GetStringFromTime(camEvent.timeUTC)));
+			json_object_set_new(snapshot_info, "size", json_integer(camEvent.data_size));
+			json_object_set_new(snapshot_info, "width", json_integer(camEvent.snapshot_width));
+			json_object_set_new(snapshot_info, "height", json_integer(camEvent.snapshot_height));
+			json_object_set(jcmd, "snapshot_info", snapshot_info);
+			json_decref(snapshot_info);
+		}
+		else
+		{
+			Log.e("%s error camEvent.data_size=%d", __FUNCTION__, camEvent.data_size);
+		}
 	}
 
 	json_object_set_new(jcmd, CameraManagerParams::TIME, json_real(camEvent.timeUTC));
@@ -558,7 +628,7 @@ int CameraManager::send_cam_event(const CameraEvent &camEvent)
 
 int CameraManager::recv_cmd_HELLO(std::string data)
 {
-	Log.d("recv_cmd_HELLO %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -606,7 +676,7 @@ int CameraManager::recv_cmd_HELLO(std::string data)
 
 int CameraManager::recv_cmd_CAM_HELLO(std::string data)
 {
-	Log.d("recv_cmd_CAM_HELLO %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -632,9 +702,16 @@ int CameraManager::recv_cmd_CAM_HELLO(std::string data)
 	if (p) {
 		mCameraManagerConfig.setMediaServer(p);
 	}
-	p = json_string_value(json_object_get(jdata, CameraManagerParams::ACTIVITY));
-	if (p) {
-		mCameraManagerConfig.setCameraActivity( json_boolean_value(json_object_get(jdata, CameraManagerParams::ACTIVITY)));
+
+	json_t* jact = json_object_get(jdata, CameraManagerParams::ACTIVITY);
+	if (jact)
+	{
+		bool bActivity = json_boolean_value(jact);
+		mCameraManagerConfig.setCameraActivity(bActivity);
+		if(mCallback)
+			mCallback->onSetActivity(bActivity);
+		else
+			Log.d("recv_cmd_CAM_HELLO mCallback==NULL");
 	}
 
 	on_update_cam_config();
@@ -645,7 +722,11 @@ int CameraManager::recv_cmd_CAM_HELLO(std::string data)
 		string stream_id = "Main";//mVXGCloudCamera.getStreamID();
 		string sid = mCameraManagerConfig.getSID();
 
-		mStreamUrl = "rtmp://" + mediaServerURL + "/" + cam_path + stream_id + "?sid=" + sid;
+		if ((std::string::npos == mediaServerURL.find("rtmp://")) && (std::string::npos == mediaServerURL.find("rtmps://")))
+			mStreamUrl = "rtmp://" + mediaServerURL + "/" + cam_path + stream_id + "?sid=" + sid;
+		else
+			mStreamUrl = mediaServerURL + "/" + cam_path + stream_id + "?sid=" + sid;
+
 		misPrepared = true;
 
 		if (false == m_bHelloDone)
@@ -661,13 +742,15 @@ int CameraManager::recv_cmd_CAM_HELLO(std::string data)
 
 	m_bHelloDone = true;
 
+	send_wifi_event();
+
 	return 0;
 }
 
 int CameraManager::recv_cmd_STREAM_START(std::string data)
 {
 
-	Log.d("=>recv_cmd_STREAM_START %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -717,14 +800,14 @@ int CameraManager::recv_cmd_STREAM_START(std::string data)
 
 	json_decref(jdata);
 
-	Log.d("<=recv_cmd_STREAM_START");
+	Log.d("<=%s", __FUNCTION__);
 
 	return 0;
 }
 
 int CameraManager::recv_cmd_STREAM_STOP(std::string data)
 {
-	Log.d("=>recv_cmd_STREAM_STOP %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -773,14 +856,14 @@ int CameraManager::recv_cmd_STREAM_STOP(std::string data)
 
 	json_decref(jdata);
 
-	Log.d("<=recv_cmd_STREAM_STOP");
+	Log.d("<=%s", __FUNCTION__);
 
 	return 0;
 }
 
 int CameraManager::recv_cmd_BYE(std::string data)
 {
-	Log.d("recv_cmd_BYE %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -838,7 +921,8 @@ int CameraManager::recv_cmd_BYE(std::string data)
 
 int CameraManager::recv_cmd_CAM_UPDATE_PREVIEW(std::string data)
 {
-	Log.d("recv_cmd_CAM_UPDATE_PREVIEW %s", data.c_str());
+
+	Log.d("%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -852,24 +936,37 @@ int CameraManager::recv_cmd_CAM_UPDATE_PREVIEW(std::string data)
 
 	if (cam_id != mCameraManagerConfig.getCamID()) {
 		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
-
 		json_decref(jdata);
 		return -2;
 	}
 
+	time_t tutc = time(NULL) + m_nCamTZ;
+
 	if (mCallback)
-		mCallback->onUpdatePreview();
+	{
+		time_t ttmp = mCallback->GetCloudTime();
+		if (ttmp)
+			tutc = ttmp;
+	}
+
+	std::string time_utc = GetStringFromTime(tutc);
+	std::string url = "http://" + mCameraManagerConfig.getUploadURL() + "/" + mCameraManagerConfig.getCamPath() + "?sid=" + mCameraManagerConfig.getSID() + "&cat=preview&type=jpg&start=" + time_utc;
+
+	Log.d("%s url=%s", __FUNCTION__, url.c_str());
+
+	if (mCallback)
+		mCallback->onUpdatePreview(url);
 
 	send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::OK);
-
 	json_decref(jdata);
 
 	return 0;
+
 }
 
 int CameraManager::recv_cmd_CONFIGURE(std::string data)
 {
-	Log.d("recv_cmd_CONFIGURE %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -936,7 +1033,7 @@ int CameraManager::recv_cmd_CONFIGURE(std::string data)
 
 int CameraManager::recv_cmd_GET_AUDIO_DETECTION(std::string data)
 {
-	Log.d("recv_cmd_GET_AUDIO_DETECTION %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -965,7 +1062,7 @@ int CameraManager::recv_cmd_GET_AUDIO_DETECTION(std::string data)
 int CameraManager::recv_cmd_GET_CAM_AUDIO_CONF(std::string data)
 {
 
-	Log.d("recv_cmd_GET_CAM_AUDIO_CONF %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -1044,7 +1141,8 @@ int CameraManager::recv_cmd_GET_CAM_AUDIO_CONF(std::string data)
 	json_decref(jcmd);
 	json_decref(jdata);
 
-	Log.d("recv_cmd_GET_CAM_AUDIO_CONF send=%s", scmd.c_str());
+	//Log.d("recv_cmd_GET_CAM_AUDIO_CONF send=%s", scmd.c_str());
+	Log.d("<=%s", __FUNCTION__);
 
 	return mWebSocket.WriteBack(scmd.c_str());
 
@@ -1054,7 +1152,7 @@ int CameraManager::recv_cmd_GET_CAM_EVENTS(std::string data)
 {
 	//{"cmd":"cam_events_conf", "refid" : 12, "orig_cmd" : "get_cam_events", "cam_id" : 164614, "enabled" : true, "events" : [{"caps":{"stream":true, "snapshot" : false}, "event" : "record", "active" : true, "stream" : true, "snapshot" : false}, { "caps":{"stream":true,"snapshot" : false},"event" : "memorycard","active" : true,"stream" : true,"snapshot" : false }]}
 
-	Log.d("recv_cmd_GET_CAM_EVENTS %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -1100,29 +1198,64 @@ int CameraManager::recv_cmd_GET_CAM_EVENTS(std::string data)
 	*/
 
 	//actual set
-	std::string sEvents[] = { "motion", "sound", "record" , "facedetection", "alarm", "sensor", "device", "time" };
+	std::string sEvents[] = { "motion", "sound", "record" , "facedetection", "snapshot", "alarm", "sensor", "device", "time", "wifi" };
 
 	std::string *se = sEvents;
 	int arr_length = sizeof(sEvents) / sizeof(*sEvents);
 
-	for (int i =0; i< arr_length; i++,se++) {
+	for (int i =0; i< arr_length; i++, se++) {
 
+		bool bSnapshot = (i == 4);
+		bool bExternal = (i > 4);
+		bool bWiFi = (i == 9);
 		//event
 		json_t *jevent = json_object();
 
 		//caps
 		json_t *event_caps = json_object();
-		json_object_set_new(event_caps, CameraManagerParams::STREAM, json_true());
-		json_object_set_new(event_caps, CameraManagerParams::SNAPSHOT, json_true());//json_false());
-		json_object_set_new(event_caps, CameraManagerParams::TRIGGER, json_boolean((i > 3)));//external events
+
+
+		if (bWiFi)
+		{
+			json_object_set_new(event_caps, CameraManagerParams::STREAM, json_false());
+			json_object_set_new(event_caps, CameraManagerParams::SNAPSHOT, json_false());
+			json_object_set_new(event_caps, CameraManagerParams::TRIGGER, json_false());
+			json_object_set_new(event_caps, CameraManagerParams::PERIODIC, json_false());
+		}
+		else
+		{
+			json_object_set_new(event_caps, CameraManagerParams::STREAM, json_boolean(!bSnapshot));
+			json_object_set_new(event_caps, CameraManagerParams::SNAPSHOT, json_true());
+			json_object_set_new(event_caps, CameraManagerParams::TRIGGER, json_boolean(bExternal));
+			json_object_set_new(event_caps, CameraManagerParams::PERIODIC, json_boolean(bSnapshot));
+		}
 
 		json_object_set_new(jevent, CameraManagerParams::CAPS, event_caps);
-		json_object_set_new(jevent, CameraManagerParams::ACTIVE, json_true());
-		json_object_set_new(jevent, CameraManagerParams::STREAM, json_true());
-		json_object_set_new(jevent, CameraManagerParams::SNAPSHOT, json_true());//json_false());
-		//name
+
+		json_object_set_new(jevent, CameraManagerParams::SNAPSHOT, json_boolean(!bWiFi));
 		json_object_set_new(jevent, CameraManagerParams::EVENT, json_string(se->c_str()));
 
+		if (bSnapshot)
+		{
+			char period[32] = { 0 };
+			char active[32] = { 0 };
+			MYGetPrivateProfileString("SnapShot", "Period", "0", period, 32, GetSettingsFile());
+			MYGetPrivateProfileString("SnapShot", "Active", "0", active, 32, GetSettingsFile());
+			int nPeriod = atoi(period);
+			int nActive = atoi(active);
+			json_object_set_new(jevent, CameraManagerParams::PERIOD, json_integer(nPeriod));
+			json_object_set_new(jevent, CameraManagerParams::ACTIVE, json_boolean(nActive));
+			json_object_set_new(jevent, CameraManagerParams::STREAM, json_boolean(false));
+			
+			//server does not send set_cam_events at the first run after version changes
+			if (mCallback)
+				mCallback->onSetPeriodicEvents(CameraManagerParams::SNAPSHOT, nPeriod, nActive);
+		}
+		else
+		{
+			json_object_set_new(jevent, CameraManagerParams::ACTIVE, json_boolean(true));
+			json_object_set_new(jevent, CameraManagerParams::STREAM, json_boolean(!bWiFi));
+		}
 
 		//add event to events array
 		json_array_append(events, jevent);
@@ -1140,15 +1273,20 @@ int CameraManager::recv_cmd_GET_CAM_EVENTS(std::string data)
 	json_decref(jcmd);
 	json_decref(jdata);
 
-	Log.d("recv_cmd_GET_CAM_EVENTS send=%s", scmd.c_str());
+	//Log.d("recv_cmd_GET_CAM_EVENTS send=%s", scmd.c_str());
+	Log.d("<=%s", __FUNCTION__);
 
-	return mWebSocket.WriteBack(scmd.c_str());
+	int ret = mWebSocket.WriteBack(scmd.c_str());
+
+	send_wifi_event();
+
+	return ret;
 
 }
 
 int CameraManager::recv_cmd_GET_CAM_STATUS(std::string data)
 {
-	Log.d("recv_cmd_GET_CAM_STATUS %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -1178,7 +1316,8 @@ int CameraManager::recv_cmd_GET_CAM_STATUS(std::string data)
 
 	//camera status
 	json_object_set_new(jcmd, CameraManagerParams::IP, json_string(mCameraManagerConfig.getCameraIPAddress().c_str()));
-	json_object_set_new(jcmd, CameraManagerParams::ACTIVITY, json_true() /*json_boolean(mCameraManagerConfig.getCameraActivity())*/);
+//	json_object_set_new(jcmd, CameraManagerParams::ACTIVITY, json_true() /*json_boolean(mCameraManagerConfig.getCameraActivity())*/);
+	json_object_set_new(jcmd, CameraManagerParams::ACTIVITY, json_boolean(mCameraManagerConfig.getCameraActivity()));
 	json_object_set_new(jcmd, CameraManagerParams::STREAMING, json_boolean(mCameraManagerConfig.getCameraStreaming()));
 
 	//json_object_set_new(jcmd, CameraManagerParams::STATUS_LED, json_boolean(mCameraManagerConfig.getCameraStatusLed()));
@@ -1191,15 +1330,20 @@ int CameraManager::recv_cmd_GET_CAM_STATUS(std::string data)
 	json_decref(jcmd);
 	json_decref(jdata);
 
-	Log.d("recv_cmd_GET_CAM_STATUS send=%s", scmd.c_str());
+	//Log.d("recv_cmd_GET_CAM_STATUS send=%s", scmd.c_str());
+	Log.d("<=%s", __FUNCTION__);
 
-	return mWebSocket.WriteBack(scmd.c_str());
+	int ret =  mWebSocket.WriteBack(scmd.c_str());
+
+	send_wifi_event();
+
+	return ret;
 
 }
 
 int CameraManager::recv_cmd_GET_CAM_VIDEO_CONF(std::string data)
 {
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -1438,6 +1582,7 @@ int CameraManager::recv_cmd_GET_CAM_VIDEO_CONF(std::string data)
 	json_decref(jdata);
 
 	//Log.d("%s send=%s", __FUNCTION__, scmd.c_str());
+	Log.d("<=%s", __FUNCTION__);
 
 	return mWebSocket.WriteBack(scmd.c_str());
 
@@ -1474,10 +1619,22 @@ int CameraManager::recv_cmd_DIRECT_UPLOAD_URL(std::string data)
 
 	std::string url  = json_string_value(json_object_get(jdata, "url"));
 	int refid = json_integer_value(json_object_get(jdata, "refid"));
-	Log.d("cmd=%s, url=%s, refid=%d", cmd, url.c_str(), refid);
+	//Log.d("cmd=%s, url=%s, refid=%d", cmd, url.c_str(), refid);
 
+//#define CURL_TEST_HTTPS
+
+#ifdef CURL_TEST_HTTPS
+	const char* uuu = url.c_str();
+	char* newurl = new char[strlen(uuu) + 16];
+	sprintf(newurl, "https://%s", &uuu[7]);
+	//Log.d("cmd=%s, newurl=%s, refid=%d", cmd, newurl, refid);
+	if (mCallback)
+		mCallback->onRecvUploadUrl(newurl, refid);
+	delete[] newurl;
+#else
 	if (mCallback)
 		mCallback->onRecvUploadUrl(url, refid);
+#endif
 
 	send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::OK);
 
@@ -1489,7 +1646,7 @@ int CameraManager::recv_cmd_DIRECT_UPLOAD_URL(std::string data)
 int CameraManager::recv_cmd_GET_MOTION_DETECTION(std::string data)
 {
 
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -1580,7 +1737,119 @@ int CameraManager::recv_cmd_GET_MOTION_DETECTION(std::string data)
 
 int CameraManager::recv_cmd_GET_STREAM_BY_EVENT(std::string data)
 {
-	return -1;
+	json_error_t err;
+	json_t* jdata = json_loads(data.c_str(), 0, &err);
+	long long cmd_id;
+	const char* cmd;
+	long long cam_id;
+
+	Log.d("%s %s", __FUNCTION__, data.c_str());
+
+	if (!jdata) {
+		return -1;
+	}
+
+	cmd_id = json_integer_value(json_object_get(jdata, CameraManagerParams::MSGID));
+	cmd = json_string_value(json_object_get(jdata, CameraManagerParams::CMD));
+	cam_id = json_integer_value(json_object_get(jdata, CameraManagerParams::CAM_ID));
+
+	if (cam_id != mCameraManagerConfig.getCamID()) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -2;
+	}
+
+	if (!mCallback) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -3;
+	}
+
+	string scmd = "";
+	json_t* jcmd = json_object();
+	json_object_set_new(jcmd, CameraManagerParams::REFID, json_integer(cmd_id));
+	json_object_set_new(jcmd, CameraManagerParams::ORIG_CMD, json_string(cmd));
+	json_object_set_new(jcmd, CameraManagerParams::CAM_ID, json_integer(cam_id));
+	json_object_set_new(jcmd, CameraManagerParams::STREAM_ID, json_string("Main"));
+	json_object_set_new(jcmd, CameraManagerParams::CMD, json_string(CameraManagerCommands::STREAM_BY_EVENT_CONF));
+
+	time_t preevent = MP4_FILE_DURATION;
+	time_t postevent = MP4_FILE_DURATION;
+
+	if (mCallback)
+		mCallback->onGetEventLimits(&preevent, &postevent);//in seconds
+
+	json_object_set_new(jcmd, "pre_event", json_integer(preevent * 1000));//in milliseconds
+	json_object_set_new(jcmd, "post_event", json_integer(postevent * 1000));
+
+	json_t* caps = json_object();
+	json_object_set_new(caps, "pre_event_max", json_integer(60 * 1000));
+	json_object_set_new(caps, "post_event_max", json_integer(60 * 1000));
+	json_object_set(jcmd, "caps", caps);
+	json_decref(caps);
+
+	char* jstr = json_dumps(jcmd, 0);
+	Log.d("%s jstr=%s", __FUNCTION__, jstr);
+	scmd = jstr;
+	free(jstr);
+	json_decref(jcmd);
+	json_decref(jdata);
+	return mWebSocket.WriteBack(scmd.c_str());
+}
+
+int CameraManager::recv_cmd_SET_STREAM_BY_EVENT(std::string data)
+{
+	json_error_t err;
+	json_t* jdata = json_loads(data.c_str(), 0, &err);
+	long long cmd_id;
+	const char* cmd;
+	long long cam_id;
+
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
+
+	if (!jdata) {
+		return -1;
+	}
+
+	cmd_id = json_integer_value(json_object_get(jdata, CameraManagerParams::MSGID));
+	cmd = json_string_value(json_object_get(jdata, CameraManagerParams::CMD));
+	cam_id = json_integer_value(json_object_get(jdata, CameraManagerParams::CAM_ID));
+
+	if (cam_id != mCameraManagerConfig.getCamID()) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -2;
+	}
+
+	if (!mCallback) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -3;
+	}
+
+	time_t preevent = MP4_FILE_DURATION;
+	time_t postevent = MP4_FILE_DURATION;
+
+	json_t* tmp = NULL;
+	tmp = json_object_get(jdata, "pre_event");
+	if (tmp)
+		preevent = json_integer_value(tmp)/1000;
+	tmp = json_object_get(jdata, "post_event");
+	if (tmp)
+		postevent = json_integer_value(tmp)/1000;
+
+	if(preevent <=0 )
+		preevent = MP4_FILE_DURATION;
+	if (postevent <= 0)
+		postevent = MP4_FILE_DURATION;
+
+	if (mCallback)
+		mCallback->onSetEventLimits(preevent, postevent);
+
+	send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::OK);
+	json_decref(jdata);
+	return 0;
+
 }
 
 int CameraManager::recv_cmd_GET_STREAM_CAPS(std::string data)
@@ -1592,7 +1861,7 @@ int CameraManager::recv_cmd_GET_STREAM_CAPS(std::string data)
 	const char *cmd;
 	long long cam_id;
 
-	Log.d("get_stream_caps: %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	if (!jdata) {
 		return -1;
@@ -1637,7 +1906,7 @@ int CameraManager::recv_cmd_GET_STREAM_CONFIG(std::string data)
 	string audio_config_str;
 	string retVal;
 
-	Log.d("get_stream_config: %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	if (!jdata) {
 		return -1;
@@ -1686,7 +1955,14 @@ int CameraManager::recv_cmd_GET_STREAM_CONFIG(std::string data)
 		video_config_str += ",\"quality\": " + std::to_string(video_config.getQuality());
 		video_config_str += ",\"stream\": \"" + video_config.getStream() + "\"";
 		video_config_str += ",\"gop\": " + std::to_string(video_config.getGop());
-		video_config_str += ", \"format\": \"H264\", \"vbr\": true, \"brt\": 2000";
+//		video_config_str += ", \"format\": \"H264\", \"vbr\": true, \"brt\": 2000";
+		video_config_str += ",\"format\": \"H264\"";
+		video_config.isVbr() ? video_config_str += ", \"vbr\": true" : video_config_str += ", \"vbr\": false";
+		if (video_config.getCBRbrt()>0)
+			video_config_str += ", \"brt\": " + std::to_string(video_config.getCBRbrt());
+		if (video_config.getVBRbrt()>0)
+			video_config_str += ", \"vbr_brt\": " + std::to_string(video_config.getVBRbrt());
+
 		video_config_str += "}";
 	}
 	video_config_str += "]";
@@ -1706,7 +1982,7 @@ int CameraManager::recv_cmd_GET_STREAM_CONFIG(std::string data)
 
 int CameraManager::recv_cmd_GET_SUPPORTED_STREAMS(std::string data)
 {
-	Log.d("recv_cmd_GET_SUPPORTED_STREAMS %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -1766,7 +2042,8 @@ int CameraManager::recv_cmd_GET_SUPPORTED_STREAMS(std::string data)
 	json_decref(jcmd);
 	json_decref(jdata);
 
-	Log.d("recv_cmd_GET_SUPPORTED_STREAMS send=%s", scmd.c_str());
+	//Log.d("recv_cmd_GET_SUPPORTED_STREAMS send=%s", scmd.c_str());
+	Log.d("<=%s", __FUNCTION__);
 
 	return mWebSocket.WriteBack(scmd.c_str());
 
@@ -1775,7 +2052,7 @@ int CameraManager::recv_cmd_GET_SUPPORTED_STREAMS(std::string data)
 int CameraManager::recv_cmd_SET_CAM_AUDIO_CONF(std::string data)
 {
 
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -1832,42 +2109,7 @@ int CameraManager::recv_cmd_SET_CAM_AUDIO_CONF(std::string data)
 
 int CameraManager::recv_cmd_SET_CAM_EVENTS(std::string data)
 {
-	Log.d("recv_cmd_SET_CAM_EVENTS %s", data.c_str());
-
-	json_error_t err;
-	json_t *jdata = json_loads(data.c_str(), 0, &err);
-	if (!jdata) {
-		return -1;
-	}
-
-	long long cmd_id = json_integer_value(json_object_get(jdata, CameraManagerParams::MSGID));
-	const char *cmd = json_string_value(json_object_get(jdata, CameraManagerParams::CMD));
-	long long cam_id = json_integer_value(json_object_get(jdata, CameraManagerParams::CAM_ID));
-
-	send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::OK);
-
-	json_decref(jdata);
-	return 0;
-
-	//TODO add memory card info
-	/*response.put(CameraManagerParameterNames.CMD, CameraManagerCommandNames.CAM_EVENT);
-	response.put(CameraManagerParameterNames.EVENT, "memorycard");
-	response.put(CameraManagerParameterNames.CAM_ID, mCameraID);
-	Double time = Double.valueOf(System.currentTimeMillis());
-	time = time / 1000;
-	response.put(CameraManagerParameterNames.TIME, time);
-
-	JSONObject memorycardinfo = new JSONObject();
-	memorycardinfo.put(CameraManagerParameterNames.STATUS, CameraManagerMemoryCardStatus.NORMAL);
-	memorycardinfo.put(CameraManagerParameterNames.SIZE, mSize); // in MB
-	memorycardinfo.put(CameraManagerParameterNames.FREE, mFree); // in MB
-
-	response.put(CameraManagerParameterNames.MEMORYCARD_INFO, memorycardinfo);*/
-}
-
-int CameraManager::recv_cmd_SET_CAM_PARAMETER(std::string data)
-{
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -1881,9 +2123,92 @@ int CameraManager::recv_cmd_SET_CAM_PARAMETER(std::string data)
 
 	if (cam_id != mCameraManagerConfig.getCamID()) {
 		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
-
 		json_decref(jdata);
 		return -2;
+	}
+
+	if (!mCallback) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -3;
+	}
+
+	json_t* jevents = json_object_get(jdata, "events");
+	if (jevents)
+	{
+		int cnt = 0;
+		json_t* jevt = NULL;
+		do {
+			jevt = json_array_get(jevents, cnt++);
+			if (jevt)
+			{
+				json_t* jtype = json_object_get(jevt, "event");
+				if (jtype)
+				{
+					const char* sztype = json_string_value(jtype);
+					if (sztype)
+					{
+						//Log.d("%s event type = %s", __FUNCTION__, sztype);
+						if (!strcmp(sztype, CameraManagerParams::SNAPSHOT))
+						{
+							json_t* jperiod = json_object_get(jevt, CameraManagerParams::PERIOD);
+							json_t* jactive = json_object_get(jevt, CameraManagerParams::ACTIVE);
+							int period = 0;
+							bool active = false;
+
+							if (jperiod)
+								period = json_integer_value(jperiod);
+
+							if(jactive)
+								active = json_boolean_value(jactive);
+
+							char szperiod[32] = { 0 };
+							char szactive[32] = { 0 };
+							sprintf(szperiod, "%d", period);
+							sprintf(szactive, "%d", active);
+							MYWritePrivateProfileString("SnapShot", "Period", szperiod, GetSettingsFile());
+							MYWritePrivateProfileString("SnapShot", "Active", szactive, GetSettingsFile());
+
+							//Log.d("%s %s period=%d, active=%d", __FUNCTION__, sztype, period, active);
+
+							if (mCallback)
+								mCallback->onSetPeriodicEvents(CameraManagerParams::SNAPSHOT, period, active);
+						}
+					}
+				}
+			}
+		} while (jevt);
+	}
+
+	send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::OK);
+	json_decref(jdata);
+	return 0;
+}
+
+int CameraManager::recv_cmd_SET_CAM_PARAMETER(std::string data)
+{
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
+
+	json_error_t err;
+	json_t *jdata = json_loads(data.c_str(), 0, &err);
+	if (!jdata) {
+		return -1;
+	}
+
+	long long cmd_id = json_integer_value(json_object_get(jdata, CameraManagerParams::MSGID));
+	const char *cmd = json_string_value(json_object_get(jdata, CameraManagerParams::CMD));
+	long long cam_id = json_integer_value(json_object_get(jdata, CameraManagerParams::CAM_ID));
+
+	if (cam_id != mCameraManagerConfig.getCamID()) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -2;
+	}
+
+	if (!mCallback) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -3;
 	}
 
 	json_t* tmp = NULL;
@@ -1891,9 +2216,16 @@ int CameraManager::recv_cmd_SET_CAM_PARAMETER(std::string data)
 	if (tmp)
 	{
 		bool bLogEnabled = json_boolean_value(tmp);
-		if (mCallback)
-			mCallback->onSetLogEnable(bLogEnabled);
+		mCallback->onSetLogEnable(bLogEnabled);
 		mCameraManagerConfig.setCameraStatusLed(bLogEnabled);
+	}
+
+	tmp = json_object_get(jdata, "activity");
+	if (tmp)
+	{
+		bool bActivity = json_boolean_value(tmp);
+		mCallback->onSetActivity(bActivity);
+		mCameraManagerConfig.setCameraActivity(bActivity);
 	}
 
 	send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::OK);
@@ -1906,7 +2238,7 @@ int CameraManager::recv_cmd_SET_CAM_PARAMETER(std::string data)
 
 int CameraManager::recv_cmd_SET_CAM_VIDEO_CONF(std::string data)
 {
-	Log.d("recv_cmd_SET_CAM_VIDEO_CONF %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -2083,7 +2415,7 @@ int CameraManager::recv_cmd_SET_CAM_VIDEO_CONF(std::string data)
 
 int CameraManager::recv_cmd_SET_MOTION_DETECTION(std::string data)
 {
-	Log.d("recv_cmd_SET_MOTION_DETECTION %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -2163,7 +2495,7 @@ int CameraManager::recv_cmd_SET_STREAM_CONFIG(std::string data)
 	long long cmd_id = json_integer_value(json_object_get(jdata, CameraManagerParams::MSGID));
 	const char *cmd = json_string_value(json_object_get(jdata, CameraManagerParams::CMD));
 
-	Log.d("recv_cmd_SET_STREAM_CONFIG: %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	mCameraManagerConfig.setStreamConfig(new StreamConfig(data));
 	if (mCallback)
@@ -2175,7 +2507,7 @@ int CameraManager::recv_cmd_SET_STREAM_CONFIG(std::string data)
 
 int CameraManager::recv_cmd_GET_PTZ_CONF(std::string data)
 {
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -2296,7 +2628,7 @@ int CameraManager::recv_cmd_GET_PTZ_CONF(std::string data)
 
 int CameraManager::recv_cmd_CAM_PTZ(std::string data)
 {
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -2338,7 +2670,7 @@ int CameraManager::recv_cmd_CAM_PTZ(std::string data)
 
 int CameraManager::recv_cmd_CAM_COMMAND(std::string data)
 {
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -2378,7 +2710,7 @@ int CameraManager::recv_cmd_CAM_COMMAND(std::string data)
 
 int CameraManager::recv_cmd_GET_OSD_CONF(std::string data)
 {
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -2513,7 +2845,7 @@ int CameraManager::recv_cmd_GET_OSD_CONF(std::string data)
 
 int CameraManager::recv_cmd_CAM_TRIGGER_EVENT(std::string data)
 {
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t* jdata = json_loads(data.c_str(), 0, &err);
@@ -2564,6 +2896,93 @@ int CameraManager::recv_cmd_CAM_TRIGGER_EVENT(std::string data)
 	return 0;
 }
 
+int CameraManager::recv_cmd_BACKWARD_START(std::string data)
+{
+
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
+
+	json_error_t err;
+	json_t* jdata = json_loads(data.c_str(), 0, &err);
+	if (!jdata) {
+		return -1;
+	}
+
+	long long cmd_id = json_integer_value(json_object_get(jdata, CameraManagerParams::MSGID));
+	const char* cmd = json_string_value(json_object_get(jdata, CameraManagerParams::CMD));
+	long long cam_id = json_integer_value(json_object_get(jdata, CameraManagerParams::CAM_ID));
+
+	if (cam_id != mCameraManagerConfig.getCamID()) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		Log.e("cam_id!=getCamID");
+		return -2;
+	}
+
+	if (!mCallback) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -3;
+	}
+
+	string strurl="";
+	json_t* jurl = json_object_get(jdata, "url");
+	if (jurl)
+		strurl = json_string_value(jurl);
+
+	if (!strurl.empty())
+	{
+		Log.d("url=%s", strurl.c_str());
+		mCallback->onStartBackward(strurl);
+	}
+
+	send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::OK);
+	json_decref(jdata);
+	return 0;
+}
+
+int CameraManager::recv_cmd_BACKWARD_STOP(std::string data)
+{
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
+
+	json_error_t err;
+	json_t* jdata = json_loads(data.c_str(), 0, &err);
+	if (!jdata) {
+		return -1;
+	}
+
+	long long cmd_id = json_integer_value(json_object_get(jdata, CameraManagerParams::MSGID));
+	const char* cmd = json_string_value(json_object_get(jdata, CameraManagerParams::CMD));
+	long long cam_id = json_integer_value(json_object_get(jdata, CameraManagerParams::CAM_ID));
+
+	if (cam_id != mCameraManagerConfig.getCamID()) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		Log.e("cam_id!=getCamID");
+		return -2;
+	}
+
+	if (!mCallback) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -3;
+	}
+
+	string strurl = "";
+	json_t* jurl = json_object_get(jdata, "url");
+	if (jurl)
+		strurl = json_string_value(jurl);
+
+	if (!strurl.empty())
+	{
+		Log.d("url=%s", strurl.c_str());
+		mCallback->onStopBackward(strurl);
+	}
+
+	send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::OK);
+	json_decref(jdata);
+	return 0;
+}
+
 
 void add_osd_value(json_t* jdata, const char* name, char* dst)
 {
@@ -2584,12 +3003,12 @@ void add_osd_value(json_t* jdata, const char* name, int* dst)
 
 int CameraManager::recv_cmd_SET_OSD_CONF(std::string data)
 {
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
 	if (!jdata) {
-		Log.e("recv_cmd_RAW_MESSAGE json_loads failed");
+		Log.e("json_loads failed");
 		return -1;
 	}
 
@@ -2600,7 +3019,7 @@ int CameraManager::recv_cmd_SET_OSD_CONF(std::string data)
 	if (cam_id != mCameraManagerConfig.getCamID()) {
 		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
 		json_decref(jdata);
-		Log.e("recv_cmd_RAW_MESSAGE cam_id!=getCamID");
+		Log.e("cam_id!=getCamID");
 		return -2;
 	}
 
@@ -2639,12 +3058,12 @@ int CameraManager::recv_cmd_SET_OSD_CONF(std::string data)
 
 int CameraManager::recv_cmd_RAW_MESSAGE(std::string data)
 {
-	Log.e("recv_cmd_RAW_MESSAGE %s", data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
 	if (!jdata) {
-		Log.e("recv_cmd_RAW_MESSAGE json_loads failed");
+		Log.e("json_loads failed");
 		return -1;
 	}
 
@@ -2655,7 +3074,7 @@ int CameraManager::recv_cmd_RAW_MESSAGE(std::string data)
 	if (cam_id != mCameraManagerConfig.getCamID()) {
 		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
 		json_decref(jdata);
-		Log.e("recv_cmd_RAW_MESSAGE cam_id!=getCamID");
+		Log.e("cam_id!=getCamID");
 		return -2;
 	}
 
@@ -2703,7 +3122,7 @@ int CameraManager::confirm_direct_upload(std::string url)
 int CameraManager::recv_cmd_CAM_GET_LOG(std::string data)
 {
 
-	Log.d("%s %s", __FUNCTION__, data.c_str());
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
 
 	json_error_t err;
 	json_t *jdata = json_loads(data.c_str(), 0, &err);
@@ -2809,7 +3228,266 @@ int CameraManager::CloudPing()
 
 time_t CameraManager::CloudPong()
 {
-	return mWebSocket.m_tLastPongTime;
+	//Log.d("%s mWebSocket.isConnected()=%d", __FUNCTION__, mWebSocket.isConnected());
+
+	if (mWebSocket.isConnected())
+		return mWebSocket.m_tLastPongTime;
+	else
+		return time(NULL);
 }
 
-//<=Camera Manager comands
+int CameraManager::recv_cmd_CAM_LIST_WIFI(std::string data)
+{
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
+
+	json_error_t err;
+	json_t* jdata = json_loads(data.c_str(), 0, &err);
+	if (!jdata) {
+		return -1;
+	}
+
+	long long cmd_id = json_integer_value(json_object_get(jdata, CameraManagerParams::MSGID));
+	const char* cmd = json_string_value(json_object_get(jdata, CameraManagerParams::CMD));
+	long long cam_id = json_integer_value(json_object_get(jdata, CameraManagerParams::CAM_ID));
+
+	if (cam_id != mCameraManagerConfig.getCamID()) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -2;
+	}
+
+	if (!mCallback) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -3;
+	}
+
+	//json_object_set_new(jcmd, CameraManagerParams::STATUS, json_string("NOT_SUPPORTED"));
+
+	string scmd;
+	json_t* jcmd = json_object();
+	json_object_set_new(jcmd, CameraManagerParams::CMD, json_string(CameraManagerCommands::CAM_WIFI_LIST));
+	json_object_set_new(jcmd, CameraManagerParams::REFID, json_integer(cmd_id));
+	json_object_set_new(jcmd, CameraManagerParams::ORIG_CMD, json_string(cmd));
+	json_object_set_new(jcmd, CameraManagerParams::CAM_ID, json_integer(cam_id));
+
+	wifi_list_t wifilist;
+	SetDefaultWiFiList(&wifilist);
+	mCallback->onGetWiFiList(&wifilist);
+
+	json_t* jnet = json_array();
+
+	for (int n = 0; n < MAX_WIFI_POINTS; n++)
+	{
+		if (wifilist.ap[n].signal == PARAMETER_NOT_SET)
+			continue;
+
+		json_t* jap = json_object();
+		json_object_set_new(jap, "ssid", json_string(wifilist.ap[n].ssid));
+		json_object_set_new(jap, "mac", json_string(wifilist.ap[n].mac));
+		json_object_set_new(jap, "signal", json_integer(wifilist.ap[n].signal));
+		if (wifilist.ap[n].encryption != PARAMETER_NOT_SET)
+			json_object_set_new(jap, "encryption", json_string(EncryptionNameServer(wifilist.ap[n].encryption)));
+
+		json_t* jecaps = json_array();
+		int x = 0;
+		if (wifilist.ap[n].encryption_caps != PARAMETER_NOT_SET)
+		{
+			while (WiFiEncryptionTypesServer[x])
+			{
+				if (wifilist.ap[n].encryption_caps & WiFiEncryptionID[x])
+				{
+					json_array_append_new(jecaps, json_string(WiFiEncryptionTypesServer[x]));
+				}
+				x++;
+			}
+		}
+		json_object_set_new(jap, "encryption_caps", jecaps);
+
+		json_array_append_new(jnet, jap);
+	}
+	json_object_set_new(jcmd, "networks", jnet);
+
+	char* jstr = json_dumps(jcmd, 0);
+	scmd = jstr;
+	free(jstr);
+
+	json_decref(jcmd);
+	json_decref(jdata);
+
+	//Log.d("%s send=%s", __FUNCTION__, scmd.c_str());
+	Log.d("<=%s", __FUNCTION__);
+
+	return mWebSocket.WriteBack(scmd.c_str());
+
+}
+
+int CameraManager::recv_cmd_CAM_SET_CURRENT_WIFI(std::string data)
+{
+	Log.d("=>%s %s", __FUNCTION__, data.c_str());
+
+	json_error_t err;
+	json_t* jdata = json_loads(data.c_str(), 0, &err);
+	if (!jdata) {
+		return -1;
+	}
+
+	long long cmd_id = json_integer_value(json_object_get(jdata, CameraManagerParams::MSGID));
+	const char* cmd = json_string_value(json_object_get(jdata, CameraManagerParams::CMD));
+	long long cam_id = json_integer_value(json_object_get(jdata, CameraManagerParams::CAM_ID));
+
+	if (cam_id != mCameraManagerConfig.getCamID()) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		Log.e("cam_id!=getCamID");
+		return -2;
+	}
+
+	if (!mCallback) {
+		send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::CM_ERROR);
+		json_decref(jdata);
+		return -3;
+	}
+
+	//{ "mac": "00:26:b3:58:f3:ed", "password" : "iu87hD12", "ssid" : "linksys-g", "cam_id" : 209980, "msgid" : 505, "cmd" : "cam_set_current_wifi", "encryption" : "WPA" }
+	wifi_params params;
+	SetDefaultWiFiParams(&params);
+	bool bGoodParam = true;
+
+	json_t* jtmp = NULL;
+	jtmp = json_object_get(jdata, "mac");
+	if (jtmp)
+		strcpy(params.mac, json_string_value(jtmp));
+	else
+		bGoodParam = false;
+
+	jtmp = json_object_get(jdata, "password");
+	if (jtmp)
+		strcpy(params.password, json_string_value(jtmp));
+	else
+		bGoodParam = false;
+
+	jtmp = json_object_get(jdata, "ssid");
+	if (jtmp)
+		strcpy(params.ssid, json_string_value(jtmp));
+	else
+		bGoodParam = false;
+
+	jtmp = json_object_get(jdata, "encryption");
+	if (jtmp)
+		params.encryption = EncryptionTypeServer(json_string_value(jtmp));
+	else
+		bGoodParam = false;
+
+	if (bGoodParam)
+	{
+		Log.d("%s params.ssid=%s", __FUNCTION__, params.ssid);
+		mCallback->onSetCurrenWiFi(&params);
+	}
+	
+	send_cmd_done(cmd_id, cmd, CameraManagerDoneStatus::OK);
+	json_decref(jdata);
+	return 0;
+}
+
+int CameraManager::send_wifi_event()
+{
+
+	Log.d("%s", __FUNCTION__);
+
+	int idx = messageId;
+	string scmd;
+	json_t* jcmd = json_object();
+	json_object_set_new(jcmd, CameraManagerParams::CMD, json_string(CameraManagerCommands::CAM_EVENT));
+	json_object_set_new(jcmd, CameraManagerParams::MSGID, json_integer(messageId++));
+	json_object_set_new(jcmd, CameraManagerParams::CAM_ID, json_integer(mCameraManagerConfig.getCamID()));
+	json_object_set_new(jcmd, CameraManagerParams::EVENT, json_string("wifi"));
+	time_t tutc = time(NULL) + m_nCamTZ;
+	if (mCallback)
+	{
+		time_t ttmp = mCallback->GetCloudTime();
+		if (ttmp)tutc = ttmp;
+	}
+	json_object_set_new(jcmd, CameraManagerParams::TIME, json_real(tutc));
+
+	wifi_list_t wifilist;
+	SetDefaultWiFiList(&wifilist);
+	mCallback->onGetWiFiList(&wifilist);
+	bool APConnected = false;
+
+	for (int n = 0; n < MAX_WIFI_POINTS; n++)
+	{
+
+//#define WIFITEST
+
+#ifdef WIFITEST
+		APConnected = true;
+		json_t* wifi_info = json_object();
+		json_object_set_new(wifi_info, "ssid", json_string("111"));
+		json_object_set_new(wifi_info, "mac", json_string("00:26:b3:58:f3:ed"));
+		json_object_set_new(wifi_info, "signal", json_integer(-55));
+		json_object_set_new(wifi_info, "state", json_string("connected"));
+		wifilist.ap[n].encryption = WIFI_ENCRYPTION_WPA;
+		wifilist.ap[n].encryption_caps = WIFI_ENCRYPTION_WPA | WIFI_ENCRYPTION_WPA2;
+#else
+		if (wifilist.ap[n].connected == false)
+			continue;
+
+		APConnected = true;
+
+		json_t* wifi_info = json_object();
+
+		json_object_set_new(wifi_info, "ssid", json_string(wifilist.ap[n].ssid));
+		json_object_set_new(wifi_info, "mac", json_string(wifilist.ap[n].mac));
+		json_object_set_new(wifi_info, "signal", json_integer(wifilist.ap[n].signal));
+		json_object_set_new(wifi_info, "state", json_string("connected"));
+#endif
+
+		if (wifilist.ap[n].encryption != PARAMETER_NOT_SET)
+			json_object_set_new(wifi_info, "encryption", json_string(EncryptionNameServer(wifilist.ap[n].encryption)));
+
+		json_t* jecaps = json_array();
+		int x = 0;
+		if (wifilist.ap[n].encryption_caps != PARAMETER_NOT_SET)
+		{
+			while (WiFiEncryptionTypesServer[x])
+			{
+				if (wifilist.ap[n].encryption_caps & WiFiEncryptionID[x])
+				{
+					json_array_append_new(jecaps, json_string(WiFiEncryptionTypesServer[x]));
+				}
+				x++;
+			}
+		}
+		json_object_set_new(wifi_info, "encryption_caps", jecaps);
+
+		json_object_set(jcmd, "wifi_info", wifi_info);
+		json_decref(wifi_info);
+		break;
+
+	}
+
+	if (!APConnected)
+	{
+		Log.d("%s WIFI not connected", __FUNCTION__);
+		json_decref(jcmd);
+		return 0;
+	}
+
+	char* jstr = json_dumps(jcmd, 0);
+	scmd = jstr;
+	free(jstr);
+
+	json_decref(jcmd);
+
+	int err = mWebSocket.WriteBack(scmd.c_str());
+
+	if (err <= 0)
+		return err;
+
+	return idx;
+}
+
+
+//<=Camera Manager commands
+

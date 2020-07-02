@@ -5,6 +5,7 @@ project(test_cloudstreamer)
 option(FLAG_USE_UBUNTU "Compile on Ubuntu)" OFF)
 option(NOEXECINFOH "Toolchain is not supports <execinfo.h>" OFF)
 option(OLDCPP "Old cpp version, less than cpp11" OFF)
+option(WITH_OPENSSL "build with openssl library" OFF)
 
 if (CMAKE_HOST_WIN32)
     set (STATICLIBEXT "lib")
@@ -33,12 +34,16 @@ endif()
 set(JANSSON_BUILD_DIR        lib CACHE PATH "Jansson build directory")
 set(LIBWEBSOCKETS_BUILD_DIR  lib CACHE PATH "Libwebsockets build directory")
 set(CLOUDSDK_BUILD_DIR       lib CACHE PATH "Cloudsdk build directory")
+set(OPENSSL_BUILD_DIR        lib CACHE PATH "openssl build directory")
+set(CURL_SOURCE_DIR          lib CACHE PATH "CURL source directory")
 
 message("-------------------------------------------------------")
 message("JANSSON_BUILD_DIR=" ${JANSSON_BUILD_DIR})
 message("LIBWEBSOCKETS_BUILD_DIR=" ${LIBWEBSOCKETS_BUILD_DIR})
 message("CLOUDSDK_BUILD_DIR=" ${CLOUDSDK_BUILD_DIR})
 message("FLAG_USE_UBUNTU=" ${FLAG_USE_UBUNTU})
+message("OPENSSL_BUILD_DIR=" ${OPENSSL_BUILD_DIR})
+message("WITH_OPENSSL=" ${WITH_OPENSSL})
 message("-------------------------------------------------------")
 
 
@@ -93,13 +98,28 @@ find_library(
               HINTS "${CLOUDSDK_BUILD_DIR}/lib/${LIBFINDSUFFIX}"
 )
 
+if(WITH_OPENSSL)
+    find_library(                 
+             libssl
+             NAMES libssl.${STATICLIBEXT}
+             NO_DEFAULT_PATH
+             HINTS "${OPENSSL_BUILD_DIR}/lib"
+    )
+    find_library(                 
+             libcrypto
+             NAMES libcrypto.${STATICLIBEXT}
+             NO_DEFAULT_PATH
+             HINTS "${OPENSSL_BUILD_DIR}/lib"
+    )
+endif()
 
 	include_directories(${JANSSON_BUILD_DIR}/include
                     ../external_libs/cctz/include
                     ${LIBWEBSOCKETS_BUILD_DIR}/include
 		    ${XML_BUILD_DIR}/include/libxml2
+                    ${OPENSSL_BUILD_DIR}/include/
                     ../external_libs/libxml2-2.9.7/include 
-		    ../external_libs/curl-7.61.0/include
+		    ../external_libs/${CURL_SOURCE_DIR}/include
                     ../src
                     ../src/cloud/core
 		    ../src/utils
@@ -122,15 +142,17 @@ if(OLDCPP)
     target_compile_definitions(test_cloudstreamer PUBLIC OLDCPP=1)
 endif()
 
+if(WITH_OPENSSL)
+    target_compile_definitions(test_cloudstreamer PUBLIC WITH_OPENSSL=1)
+endif()
+
+
 if (CMAKE_HOST_WIN32)
     target_compile_definitions(test_cloudstreamer PUBLIC WIN32=1)
     target_compile_definitions(test_cloudstreamer PUBLIC _WIN32=1)
     target_compile_definitions(test_cloudstreamer PUBLIC WIN32_LEAN_AND_MEAN=1)
     target_compile_definitions(test_cloudstreamer PUBLIC CURL_STATICLIB=1)
-endif()
 
-
-if (CMAKE_HOST_WIN32)
     target_link_libraries( # Specifies the target
                        test_cloudstreamer
                        ${cloudsdk}
@@ -158,12 +180,29 @@ else()
                        ${cloudsdk}
                        ${jansson}
                        ${libwebsockets}
-                       ${ffstreamer}        
-                       ${libcurl}
-		       ${xml2}
-                       ${cctz}
+		       pthread
+		       dl
+			)
+
+    if (FLAG_USE_UBUNTU)
+    target_link_libraries( # Specifies the target
+                       test_cloudstreamer
+                       # Links libraries to the target library.
 		       z
 		       lzma
-		       cap	
+		       cap
 			)
+
+   endif()
 endif()
+
+if(WITH_OPENSSL)
+    target_link_libraries( # Specifies the target
+                       test_cloudstreamer
+                       # Links libraries to the target library.
+                       ${libssl}
+                       ${libcrypto}
+			)
+
+endif()
+

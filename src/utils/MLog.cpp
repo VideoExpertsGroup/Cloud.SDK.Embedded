@@ -35,22 +35,15 @@
 //#define OUTPUT_DBG_STRING
 #define OUTPUT_PRINTF
 
-//#undef HUGE_LOG
-
-#ifdef HUGE_LOG
-	#define MAX_LOG_SIZE	(1024*1024*1024)
-	#define SHOW_THREADS
-#else
-	#define MAX_LOG_SIZE	(64*1024)
-#endif
-
 LogLevel MLog::globalLevel = LOGLEVEL_ASSERT;
 bool MLog::isSignedWithDebugKey = false;
 int MLog::ndbgFile = -1;
 char MLog::FileName[256] = {0};
-int MLog::nMaxLogFileSize = MAX_LOG_SIZE;
+int MLog::nMaxLogFileSize = 0;
 CFileRing MLog::m_fr;
 DWORD log_start_timestamp = 0;
+
+bool bShowThreads = false;
 
 void MLog::setLogEnable(bool b)
 {
@@ -59,19 +52,20 @@ void MLog::setLogEnable(bool b)
 
 void MLog::_init(int level, const char * filename)
 {
-//	int m = std::min<int>(globalLevel, level);
-//  this->level = signedWithDebug() ? m : globalLevel;
 	int m = std::max<int>(globalLevel, level);
 	this->level = signedWithDebug() ? m : LOGLEVEL_ASSERT;
 
-	char* pLogSize = getenv("MAX_LOG_SIZE");
-	if (pLogSize != NULL)
-		nMaxLogFileSize = atoi(pLogSize);
+	if (!IsSplitLog())
+	{
+		nMaxLogFileSize = (1024 * 1024 * 1024);
+		bShowThreads = true;
+	}
+	else
+	{
+		nMaxLogFileSize = (64 * 1024);
+	}
 
 	int nMaxLogFileIdx = 5;
-	char* pLogIdx = getenv("MAX_LOG_IDX");
-	if (pLogIdx != NULL)
-		nMaxLogFileIdx = atoi(pLogIdx);
 
 	if(!m_fr.m_bInited)
 		m_fr.Init(filename, nMaxLogFileSize, nMaxLogFileIdx);
@@ -129,18 +123,19 @@ void MLog::dbg(int level, const char *tag, const char * str, va_list vl)
 
 	vsnprintf(buf_arg, MAX_DBG_LEN, str, vl);
 
-#ifdef SHOW_THREADS
-	unsigned int t = get_timedelta();
-	DWORD dwThread = GetCurrentThreadId();
-    if(strlen(tag))
-	    snprintf(buf_prt, MAX_DBG_LEN, "%.8d:%.3d %02d.%02d-%02d:%02d:%02d.%.03d [0x%8.8X] %s %s\n", t / 1000, t % 1000, pt->tm_mday, pt->tm_mon+1, pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec(), dwThread, tag, buf_arg);
-    else
-        snprintf(buf_prt, MAX_DBG_LEN, "%.8d:%.3d %02d.%02d-%02d:%02d:%02d.%.03d [0x%8.8X] %s\n", t / 1000, t % 1000, pt->tm_mday, pt->tm_mon + 1, pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec(), dwThread, buf_arg);
-#else
-	snprintf(buf_prt, MAX_DBG_LEN, "%02d.%02d-%02d:%02d:%02d.%.03d %s %s\n", pt->tm_mday, pt->tm_mon+1, pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec() , tag, buf_arg);
-#endif
-
-
+	if (bShowThreads)
+	{
+		unsigned int t = get_timedelta();
+		DWORD dwThread = GetCurrentThreadId();
+		if (strlen(tag))
+			snprintf(buf_prt, MAX_DBG_LEN, "%.8d:%.3d %02d.%02d-%02d:%02d:%02d.%.03d [0x%8.8X] %s %s\n", t / 1000, t % 1000, pt->tm_mday, pt->tm_mon + 1, pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec(), dwThread, tag, buf_arg);
+		else
+			snprintf(buf_prt, MAX_DBG_LEN, "%.8d:%.3d %02d.%02d-%02d:%02d:%02d.%.03d [0x%8.8X] %s\n", t / 1000, t % 1000, pt->tm_mday, pt->tm_mon + 1, pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec(), dwThread, buf_arg);
+	}
+	else
+	{
+		snprintf(buf_prt, MAX_DBG_LEN, "%02d.%02d-%02d:%02d:%02d.%.03d %s %s\n", pt->tm_mday, pt->tm_mon + 1, pt->tm_hour, pt->tm_min, pt->tm_sec, get_msec(), tag, buf_arg);
+	}
 
 #ifdef OUTPUT_DBG_STRING
 	OutputDebugString(buf_prt);

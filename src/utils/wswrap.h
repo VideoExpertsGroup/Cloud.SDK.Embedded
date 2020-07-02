@@ -35,6 +35,7 @@ extern "C" {
 //#define USE_WINDOWS_CERT_STORE
 #ifdef USE_WINDOWS_CERT_STORE
 #include "openssl\x509.h"
+//#include "G:\Projects\CameraApp\external_libs\libwebsockets\src\lib\tls\mbedtls\wrapper\include\internal\ssl_x509.h"
 #include <wincrypt.h>
 #include <cryptuiapi.h>
 #endif
@@ -126,6 +127,7 @@ private:
     vector <send_data*>         m_SendData;
     CCritSec                    m_csSendDataLock;
     size_t                      m_nMaxSendDataSize;
+    CCritSec                    m_WriteBackLock;
 
 #ifdef USE_WINDOWS_CERT_STORE
     HCERTSTORE                  m_hCertStore;

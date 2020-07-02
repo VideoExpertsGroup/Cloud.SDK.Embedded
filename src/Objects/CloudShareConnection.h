@@ -70,10 +70,10 @@ public:
 			mPort = 8888;
 		mPrefixPath = uri.Path;
 
-		Log.i("Protocol: %s", mProtocol.c_str());
-		Log.i("Host: %s", mHost.c_str());
-		Log.i("Port: %d", mPort);
-		Log.i("PrefixPath: %s", mPrefixPath.c_str());
+		Log.d("Protocol: %s", mProtocol.c_str());
+		Log.d("Host: %s", mHost.c_str());
+		Log.d("Port: %d", mPort);
+		Log.d("PrefixPath: %s", mPrefixPath.c_str());
 
 
 		mHost = mHost + ((mPort > 0 && mPort != 80) ? ":" + fto_string(mPort) : "");

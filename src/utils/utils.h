@@ -2,10 +2,14 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
-#ifdef WIN32
+#ifdef _WIN32
 #define NOMINMAX
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
+#ifndef _CRT_NONSTDC_NO_WARNINGS
 #define _CRT_NONSTDC_NO_WARNINGS
+#endif
 #include <SDKDDKVer.h>
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -15,10 +19,20 @@
 #include <string>
 #include <iostream>
 #include <algorithm>
+#include <io.h>
+#include <fcntl.h>
+#else
+#include <unistd.h>
+#include <fcntl.h>
+#include <dirent.h>
 #endif
 
 #include "MLog.h"
 #include "windefsws.h"
+
+#ifndef MP4_FILE_DURATION
+#define MP4_FILE_DURATION	(5)
+#endif
 
 time_t GetTimeFromStringUTC(const char* szTime);
 time_t GetTimeFromStringLocal(const char* szTime);
@@ -52,9 +66,9 @@ typedef struct image_params
 	int tdn;
 	int power_freq_60hz;
 	char white_balance[PARAMETER_CHAR_MAX_LENGTH];
-	char** white_balance_types;
+	const char** white_balance_types;
 	char noise_reduction[PARAMETER_CHAR_MAX_LENGTH];
-	char** noise_reduction_types;
+	const char** noise_reduction_types;
 	int noise_reduction_level;
 	int blc;
 }image_params_t;
@@ -183,10 +197,62 @@ typedef struct audDefs
 {
 	char NameCam[16];
 	char NameServ[16];
+	uint32_t FFmpegId;
 }audDefs;
 
 extern audDefs audNameTable[];
-const char* ConvertAudioName(const char* name);
+const char* ConvertAudioNameHik2Serv(const char* name);
+const char* ConvertAudioNameServ2Hik(const char* name);
+const char* ConvertAudioNameFF2Hik(uint16_t id);
+
+#define WIFI_ENCRYPTION_UNKNOWN		0
+#define WIFI_ENCRYPTION_NONE		1
+#define WIFI_ENCRYPTION_WEP			2
+#define WIFI_ENCRYPTION_WPA			4
+#define WIFI_ENCRYPTION_WPA2		8
+#define WIFI_ENCRYPTION_WPA_ENT		16
+#define WIFI_ENCRYPTION_WPA2_ENT	32
+#define WIFI_ENCRYPTION_WPA_RADIUS	64
+
+#define MAX_WIFI_POINTS				32
+
+extern const char* WiFiEncryptionTypesServer[];
+extern const char* WiFiEncryptionTypesHk[];
+extern const DWORD WiFiEncryptionID[];
+
+const char* EncryptionNameServer(DWORD type);
+const char* EncryptionNameHk(DWORD type);
+DWORD EncryptionTypeServer(const char* name);
+DWORD EncryptionTypeHk(const char* name);
+
+typedef struct wifi_params
+{
+	char		ssid[64];
+	char		mac[32];
+	char		password[32];
+	int			signal;
+	DWORD		encryption_caps;
+	DWORD		encryption;
+	bool		connected;
+}wifi_params_t;
+
+typedef struct wifi_list
+{
+	wifi_params ap[MAX_WIFI_POINTS];
+}wifi_list_t;
+
+void SetDefaultWiFiParams(wifi_params* param);
+void SetDefaultWiFiList(wifi_list* wlist);
+
+const char* GetProgramPath();
+const char* GetSettingsFile();
+bool CertFileExist();
+bool SSL_Disabled();
+bool IsSplitLog();
+bool RTMPS_Disabled();
+
+std::string str_replace(std::string str, std::string old_str, std::string new_str);
+std::string str_encode(std::string str);
 
 #endif //__UTILS_H__
 

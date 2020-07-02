@@ -97,6 +97,8 @@ public:
 
 	virtual ~CStreamerCallback() {};
 
+
+	// Start rtmp publishing
 	void onStarted(std::string url_push) //Cloud gets ready for data, url_push == rtmp://...
 	{
 		Log.v("=onStarted rtmp url=%s", url_push.c_str());
@@ -104,17 +106,20 @@ public:
 		streamPushStart(url_push);
 	}
 
+	// Stop rtmp publishing
 	void onStopped()                
 	{
 		Log.v("=onStopped");
 		streamPushStop();
 	}
 
+	// Error with cloud connection occured
 	void onError(int error)
 	{
 		Log.v("=onError %d", error);
 	}
 
+	//Called when SDK successfully connected to the server
 	void onCameraConnected() 
 	{
 		Log.v("=onCameraConnected");
@@ -125,98 +130,129 @@ public:
 		Log.v("=onCommand cmd=%s", cmd.c_str());
 	}
 
+	// Handler for the raw messages from the server
 	int onRawMsg(std::string& data)
 	{
 		return 0;
 	}
 
+	// Called when SDK receives direct upload url from the server
 	void onUploadUrl(void* inst, std::string url, int refid)
 	{
+
 	}
 
+	// Server provides url to upload log file using http POST
 	void onCamGetLog(std::string url)
 	{
+
 	}
 
+	// Should return current time from the server
 	time_t onGetCloudTime()
 	{
 		return 0;
 	}
 
+	// Server sets "record by event" recording mode
 	void onSetRecByEventsMode(bool bEventsMode)
 	{
 	}
 
+	// Should set provided resolution, fps, bitrate, cbr/vbr mode and vbr quality on the camera.
 	void setStreamConfig(CameraManagerConfig &config)
 	{
 	}
 
+	// Called when server requested stream config and stream caps
 	void onCommand(std::string data, std::string &retVal)
 	{
 	}
 
+	// Set username and password for access to the camera
 	void setHttpUser(std::string name, std::string password)
 	{
 	}
 
+	// Switching from LOGLEVEL_ERROR to LOGLEVEL_DEBUG and vice versa
 	void SetLogEnable(bool bEnable)
 	{
+
 	}
 
+	// Set brightness/contrast/saturation on the camera
 	void SetImageParams(image_params_t* img)
 	{
 	}
 
+	// Get brightness/contrast/saturation values from the camera
 	void GetImageParams(image_params_t* img)
 	{
 	}
 
+	// Set camera motion detector sensitivity, row/cols granularity and motion grid
 	void SetMotionParams(motion_params_t* mpr)
 	{
 	}
 
+	// Get camera motion detector sensitivity, row/cols granularity and motion grid
 	void GetMotionParams(motion_params_t* mpr)
 	{
 	}
 
+	// Get camera timezone
 	void GetTimeZone(char* time_zone_str)
 	{
 	}
 
+	// Set camera timezone
 	void SetTimeZone(const char* time_zone_str)
 	{
 	}
 
+	// Get pan/tilt/zoom support from the camera
 	void GetPTZParams(ptz_caps_t* ptz)
 	{
 	}
 
+	// Get speaker volume, mic gain and audio compression type from the camera
 	void GetAudioParams(audio_settings_t* audset)
 	{
 	}
 
+	// Set speaker volume, mic gain and audio compression
 	void SetAudioParams(audio_settings_t* audset)
 	{
 	}
 
+	// send PTZ commands top/bottom/right/left/zoom_in/zoom_out commands to the camera
 	void SendPTZCommand(ptz_command_t* ptz)
 	{
 	}
 
+	// Get camera current OSD parameters such as date format, time format, font size, enabled/disabled etc
 	void GetOSDParams(osd_settings_t* osd)
 	{
 	}
 
+	// Set camera OSD parameters
 	void SetOSDParams(osd_settings_t* osd)
 	{
 	}
 
+	// Directly sends command to the camera. Currently only "reboot" implemented.
 	int SendCameraCommand(cam_command_t* ccmd)
 	{
 		return 0;
 	}
 
+	// Called when Trigger event received from the server 
 	void TriggerEvent(void* inst, string evt, string meta)
+	{
+	}
+
+	// Enable/Disable streaming, recording, snapshots and mp4 uploading and events.
+	void SetActivity(bool bEnable)
 	{
 	}
 
@@ -227,7 +263,7 @@ private:
 	{
 
 	        std::string cmdline;
-        	std::string szffmpeg = "ffmpeg";
+        	std::string szffmpeg = "./ffmpeg";
 
 	        if (strstr(ARG1_CAMERA_URL.c_str(), "http://"))
         	{
@@ -235,8 +271,10 @@ private:
         	}
 	        else
         	{
-	            cmdline = szffmpeg + " -i " + ARG1_CAMERA_URL + " -vcodec copy -acodec copy -f flv " + url_push;
+	            cmdline = szffmpeg + " -i " + ARG1_CAMERA_URL + " -vcodec copy -acodec copy -f flv " + url_push + " -v 99";
         	}
+
+		Log.v("=streamPushStart cmdline=%s", cmdline.c_str());
 
 	        std::vector<char *> args;
         	std::istringstream iss(cmdline);
@@ -255,7 +293,7 @@ private:
 		pid = fork();
 		if (pid == 0)
 		{ // child process 
-			execvp("ffmpeg", &args[0]);
+			execvp("./ffmpeg", &args[0]);
 		}
 		else
 		{
@@ -324,6 +362,51 @@ private:
 		return pid;
 	}
 
+	
+	// Application should receive rtmp audio stream from this url and play it on the camera
+	void StartBackward(string url)
+	{
+		Log.d("%s", __FUNCTION__);
+	}
+	// Application should stops playback backward audio on the camera
+	void StopBackward(string url)
+	{
+		Log.d("%s", __FUNCTION__);
+	}
+
+	//Application should start/stop generate events with provided nmae and period
+	void SetPeriodicEvents(const char* name, int period, bool active)
+	{
+		Log.d("%s", __FUNCTION__);
+	}
+	// Gets pre-event and post-event durations for local mp4 recording
+	void GetEventLimits(time_t* pre, time_t* post)
+	{
+		Log.d("%s", __FUNCTION__);
+	}
+	// Sets pre-event and post-event durations for local mp4 recording
+	void SetEventLimits(time_t pre, time_t post)
+	{
+		Log.d("%s", __FUNCTION__);
+	}
+
+	// On this command application should fills the list of available wi-fi access points
+	void GetWiFiList(wifi_list_t* wifilist)
+	{
+		Log.d("%s", __FUNCTION__);
+	}
+
+	// Camera need to be switched to provided acess point
+	void SetCurrenWiFi(wifi_params* params)
+	{
+		Log.d("%s", __FUNCTION__);
+	}
+
+	// Camera should generate snapshot and POST it to this url
+	void UpdatePreview(std::string url)
+	{
+		Log.d("%s", __FUNCTION__);
+	}
 };
 
 int main(int argc, char **argv)

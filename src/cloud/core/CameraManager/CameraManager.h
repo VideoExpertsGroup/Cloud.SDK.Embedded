@@ -39,6 +39,9 @@ class CameraManager : public CUnk
 
 	long long mPubSID;
 
+	bool m_bSSL_Failed;
+	bool m_bSSL_Enabled;
+
 public:
 	MLog Log;
 
@@ -87,6 +90,7 @@ private:
 	int send_cmd_cam_register();   //send on HELLO cmd
 	int send_cmd_done(long long cmd_id, std::string cmd, std::string status);
 	int send_cmd_bye();
+	int send_wifi_event();
 	//<=send
 
 	//=>recv
@@ -105,6 +109,7 @@ private:
 	int recv_cmd_DIRECT_UPLOAD_URL(std::string data);
 	int recv_cmd_GET_MOTION_DETECTION(std::string data);
 	int recv_cmd_GET_STREAM_BY_EVENT(std::string data);
+	int recv_cmd_SET_STREAM_BY_EVENT(std::string data);
 	int recv_cmd_GET_STREAM_CAPS(std::string data);
 	int recv_cmd_GET_STREAM_CONFIG(std::string data);
 	int recv_cmd_GET_SUPPORTED_STREAMS(std::string data);
@@ -120,10 +125,12 @@ private:
 	int recv_cmd_SET_OSD_CONF(std::string data);
 	int recv_cmd_SET_CAM_PARAMETER(std::string data);
 	int recv_cmd_CAM_TRIGGER_EVENT(std::string data);
-
+	int recv_cmd_BACKWARD_START(std::string data);
+	int recv_cmd_BACKWARD_STOP(std::string data);
 	int recv_cmd_RAW_MESSAGE(std::string data);
-
 	int recv_cmd_CAM_GET_LOG(std::string data);
+	int recv_cmd_CAM_LIST_WIFI(std::string data);
+	int recv_cmd_CAM_SET_CURRENT_WIFI(std::string data);
 
 	//<=recv
 

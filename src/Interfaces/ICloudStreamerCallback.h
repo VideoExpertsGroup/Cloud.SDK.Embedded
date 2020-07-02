@@ -35,7 +35,16 @@ public:
 	virtual void GetAudioParams(audio_settings_t* audset) = 0;
 	virtual void SetAudioParams(audio_settings_t* audset) = 0;
 	virtual void SetLogEnable(bool bEnable) = 0;
+	virtual void SetActivity(bool bEnable) = 0;
 	virtual void TriggerEvent(void* inst, string evt, string meta) = 0;
+	virtual void StartBackward(string url) = 0;
+	virtual void StopBackward(string url) = 0;
+	virtual void SetPeriodicEvents(const char* name, int period, bool active) = 0;
+	virtual void GetEventLimits(time_t* pre, time_t* post) = 0;
+	virtual void SetEventLimits(time_t pre, time_t post) = 0;
+	virtual void GetWiFiList(wifi_list_t* wifilist) = 0;
+	virtual void SetCurrenWiFi(wifi_params* params) = 0;
+	virtual void UpdatePreview(std::string url) = 0;
 	void* parent;
 };
 

@@ -97,6 +97,9 @@ namespace CameraManagerParams {
 	const char * ERROR_DESCRIPTION = "error_description";
 	const char * RETRY = "retry";
 	const char * TRIGGER = "trigger";
+	const char * PERIODIC = "periodic";
+	const char * PERIOD = "period";
 	const char * META = "meta";
+	const char * MEDIA_PROTOCOLS = "media_protocols";
 }
 #endif //__CAMERAMANAGERPARAMS_H__

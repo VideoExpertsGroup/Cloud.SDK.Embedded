@@ -23,6 +23,7 @@ namespace CameraManagerCommands {
 	const char * CAM_EVENTS_CONF = "cam_events_conf";
 	const char * SET_CAM_EVENTS = "set_cam_events";
 	const char * GET_STREAM_BY_EVENT = "get_stream_by_event";
+	const char * SET_STREAM_BY_EVENT = "set_stream_by_event";
 	const char * STREAM_BY_EVENT_CONF = "stream_by_event_conf";
 	const char * SET_CAM_VIDEO_CONF = "set_cam_video_conf";
 	const char * SET_CAM_AUDIO_CONF = "set_cam_audio_conf";
@@ -57,5 +58,12 @@ namespace CameraManagerCommands {
 	const char * OSD_CONF = "osd_conf";
 	const char * SET_CAM_PARAMETER = "set_cam_parameter";
 	const char * CAM_TRIGGER_EVENT = "cam_trigger_event";
+	const char * BACKWARD_START = "backward_start";
+	const char * BACKWARD_STOP = "backward_stop";
+
+	const char * CAM_LIST_WIFI = "cam_list_wifi";
+	const char * CAM_WIFI_LIST = "cam_wifi_list";
+	const char * CAM_SET_CURRENT_WIFI = "cam_set_current_wifi";
+
 }
 #endif //__CAMERAMANAGERCOMMANDS_H__
