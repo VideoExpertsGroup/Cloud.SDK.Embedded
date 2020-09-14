@@ -166,7 +166,7 @@ public:
 
 	// Called when server requested stream config and stream caps
 	void onCommand(std::string data, std::string &retVal)
-	{
+	{    
 	}
 
 	// Set username and password for access to the camera
@@ -267,11 +267,11 @@ private:
 
 	        if (strstr(ARG1_CAMERA_URL.c_str(), "http://"))
         	{
-	            cmdline = szffmpeg + " -f h264 -i " + ARG1_CAMERA_URL + " -vcodec copy -acodec copy -f flv " + url_push;
+	            cmdline = szffmpeg + " -f h264 -i " + ARG1_CAMERA_URL + " -vcodec copy -acodec copy -f flv \"" + url_push + "\"";
         	}
 	        else
         	{
-	            cmdline = szffmpeg + " -i " + ARG1_CAMERA_URL + " -vcodec copy -acodec copy -f flv " + url_push + " -v 99";
+	            cmdline = szffmpeg + " -i " + ARG1_CAMERA_URL + " -vcodec copy -acodec copy -f flv \"" + url_push + "\" -v 99";
         	}
 
 		Log.v("=streamPushStart cmdline=%s", cmdline.c_str());
@@ -407,6 +407,7 @@ private:
 	{
 		Log.d("%s", __FUNCTION__);
 	}
+
 };
 
 int main(int argc, char **argv)
